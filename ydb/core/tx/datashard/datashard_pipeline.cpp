@@ -2285,15 +2285,11 @@ void TPipeline::AddCommittingOp(const TOperation::TPtr& op) {
     if (!Self->IsMvccEnabled() || op->IsReadOnly())
         return;
 
-    Y_VERIFY_S(!op->GetCommittingOpsVersion(),
-        "Trying to AddCommittingOp " << *op << " more than once");
-
     TRowVersion version = Self->GetReadWriteVersions(op.Get()).WriteVersion;
     if (op->IsImmediate())
         CommittingOps.Add(op->GetTxId(), version);
     else
         CommittingOps.Add(version);
-    op->SetCommittingOpsVersion(version);
 }
 
 void TPipeline::RemoveCommittingOp(const TRowVersion& version) {
@@ -2303,13 +2299,13 @@ void TPipeline::RemoveCommittingOp(const TRowVersion& version) {
 }
 
 void TPipeline::RemoveCommittingOp(const TOperation::TPtr& op) {
-    if (const auto& version = op->GetCommittingOpsVersion()) {
-        if (op->IsImmediate())
-            CommittingOps.Remove(op->GetTxId(), *version);
-        else
-            CommittingOps.Remove(*version);
-        op->ResetCommittingOpsVersion();
-    }
+    if (!Self->IsMvccEnabled() || op->IsReadOnly())
+        return;
+
+    if (op->IsImmediate())
+        CommittingOps.Remove(op->GetTxId());
+    else
+        CommittingOps.Remove(TRowVersion(op->GetStep(), op->GetTxId()));
 }
 
 bool TPipeline::WaitCompletion(const TOperation::TPtr& op) const {

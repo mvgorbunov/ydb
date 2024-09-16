@@ -1,7 +1,6 @@
 #include "schemeshard_xxport__tx_base.h"
 #include "schemeshard_export_flow_proposals.h"
 #include "schemeshard_export.h"
-#include "schemeshard_audit_log.h"
 #include "schemeshard_impl.h"
 
 #include <ydb/public/api/protos/ydb_issue_message.pb.h>
@@ -89,11 +88,6 @@ struct TSchemeShard::TExport::TTxCancel: public TSchemeShard::TXxport::TTxBase {
 
         Send(Request->Sender, std::move(response), 0, Request->Cookie);
         SendNotificationsIfFinished(exportInfo);
-
-        if (exportInfo->IsFinished()) {
-            AuditLogExportEnd(*exportInfo.Get(), Self);
-        }
-
         return true;
     }
 
@@ -173,11 +167,6 @@ struct TSchemeShard::TExport::TTxCancelAck: public TSchemeShard::TXxport::TTxBas
         }
 
         SendNotificationsIfFinished(exportInfo);
-
-        if (exportInfo->IsFinished()) {
-            AuditLogExportEnd(*exportInfo.Get(), Self);
-        }
-
         return true;
     }
 

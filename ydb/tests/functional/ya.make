@@ -18,7 +18,6 @@ RECURSE(
     query_cache
     rename
     restarts
-    replication
     scheme_shard
     scheme_tests
     script_execution

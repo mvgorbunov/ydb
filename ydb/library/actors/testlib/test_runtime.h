@@ -203,36 +203,6 @@ namespace NActors {
         }
     };
 
-    /**
-     * Allows customizing behavior based on the event type
-     */
-    template<class TEvType>
-    struct TTestEventObserverTraits {
-        static bool Match(IEventHandle::TPtr& ev) noexcept {
-            return ev->GetTypeRewrite() == TEvType::EventType;
-        }
-
-        static typename TEvType::TPtr& Convert(IEventHandle::TPtr& ev) noexcept {
-            return reinterpret_cast<typename TEvType::TPtr&>(ev);
-        }
-    };
-
-    template<>
-    struct TTestEventObserverTraits<IEventHandle> {
-        static constexpr bool Match(IEventHandle::TPtr&) noexcept {
-            return true;
-        }
-
-        static constexpr IEventHandle::TPtr& Convert(IEventHandle::TPtr& ev) noexcept {
-            return ev;
-        }
-    };
-
-    template<class TEvType>
-    struct TTestEventObserverTraits<TEventHandle<TEvType>>
-        : public TTestEventObserverTraits<TEvType>
-    {};
-
     class TTestActorRuntimeBase: public TNonCopyable {
     public:
         class TEdgeActor;
@@ -405,16 +375,21 @@ namespace NActors {
             observerHolder.Remove();
         */
 
-        template <typename TEvType = IEventHandle>
+        template <typename TEvType>
         TEventObserverHolder AddObserver(std::function<void(typename TEvType::TPtr&)> observerFunc)
         {
-            auto baseFunc = [observerFunc](IEventHandle::TPtr& event) {
-                if (event && TTestEventObserverTraits<TEvType>::Match(event)) {
-                    observerFunc(TTestEventObserverTraits<TEvType>::Convert(event));
-                }
+            auto baseFunc = [observerFunc](TAutoPtr<IEventHandle>& event) {
+                if (event && event->GetTypeRewrite() == TEvType::EventType)
+                    observerFunc(*(reinterpret_cast<typename TEvType::TPtr*>(&event)));
             };
 
             auto iter = ObserverFuncs.insert(ObserverFuncs.end(), baseFunc);
+            return TEventObserverHolder(&ObserverFuncs, std::move(iter));
+        }
+
+        TEventObserverHolder AddObserver(std::function<void(TAutoPtr<IEventHandle>&)> observerFunc)
+        {
+            auto iter = ObserverFuncs.insert(ObserverFuncs.end(), observerFunc);
             return TEventObserverHolder(&ObserverFuncs, std::move(iter));
         }
 
@@ -470,14 +445,15 @@ namespace NActors {
                 TDuration simTimeout = TDuration::Max())
         {
             typename TEvent::TPtr handle;
+            const ui32 eventType = TEvent::EventType;
             WaitForEdgeEvents([&](TTestActorRuntimeBase& runtime, TAutoPtr<IEventHandle>& event) {
                 Y_UNUSED(runtime);
-                if (!TTestEventObserverTraits<TEvent>::Match(event))
+                if (event->GetTypeRewrite() != eventType)
                     return false;
 
-                typename TEvent::TPtr& typedEvent = TTestEventObserverTraits<TEvent>::Convert(event);
-                if (predicate(typedEvent)) {
-                    handle = std::move(typedEvent);
+                typename TEvent::TPtr* typedEvent = reinterpret_cast<typename TEvent::TPtr*>(&event);
+                if (predicate(*typedEvent)) {
+                    handle = *typedEvent;
                     return true;
                 }
 
@@ -832,8 +808,8 @@ namespace NActors {
         const std::function<bool(const typename TEvent::TPtr&)>& predicate) {
         ev.Destroy();
         for (auto& event : events) {
-            if (event && TTestEventObserverTraits<TEvent>::Match(event)) {
-                if (predicate(TTestEventObserverTraits<TEvent>::Convert(event))) {
+            if (event && event->GetTypeRewrite() == TEvent::EventType) {
+                if (predicate(reinterpret_cast<const typename TEvent::TPtr&>(event))) {
                     ev = event;
                     return ev->CastAsLocal<TEvent>();
                 }

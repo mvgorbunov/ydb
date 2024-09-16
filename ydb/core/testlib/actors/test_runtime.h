@@ -68,42 +68,22 @@ namespace NActors {
         void SimulateSleep(TDuration duration);
 
         template<class TResult>
-        inline TResult WaitFuture(NThreading::TFuture<TResult> f, TDuration simTimeout = TDuration::Max()) {
+        inline TResult WaitFuture(NThreading::TFuture<TResult> f) {
             if (!f.HasValue() && !f.HasException()) {
                 TDispatchOptions options;
                 options.CustomFinalCondition = [&]() {
                     return f.HasValue() || f.HasException();
                 };
-                // Quirk: non-empty FinalEvents enables full simulation
-                options.FinalEvents.emplace_back([](IEventHandle&) { return false; });
+                options.FinalEvents.emplace_back([&](IEventHandle&) {
+                    return f.HasValue() || f.HasException();
+                });
 
-                this->DispatchEvents(options, simTimeout);
+                this->DispatchEvents(options);
 
                 Y_ABORT_UNLESS(f.HasValue() || f.HasException());
             }
 
-            if constexpr (!std::is_same_v<TResult, void>) {
-                return f.ExtractValue();
-            } else {
-                return f.GetValue();
-            }
-        }
-
-        template<class TCondition>
-        inline void WaitFor(const TString& description, const TCondition& condition, TDuration simTimeout = TDuration::Max()) {
-            if (!condition()) {
-                TDispatchOptions options;
-                options.CustomFinalCondition = [&]() {
-                    return condition();
-                };
-                // Quirk: non-empty FinalEvents enables full simulation
-                options.FinalEvents.emplace_back([](IEventHandle&) { return false; });
-
-                Cerr << "... waiting for " << description << Endl;
-                this->DispatchEvents(options, simTimeout);
-
-                Y_ABORT_UNLESS(condition(), "Timeout while waiting for %s", description.c_str());
-            }
+            return f.ExtractValue();
         }
 
         TIntrusivePtr<NKikimr::TMemObserver> GetMemObserver(ui32 nodeIndex = 0) {

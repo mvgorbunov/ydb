@@ -20,7 +20,6 @@ message TExport {
         Ydb.Export.ExportToYtSettings ExportToYtSettings = 5;
         Ydb.Export.ExportToS3Settings ExportToS3Settings = 6;
     }
-    optional string UserSID = 10;
 }
 
 message TCreateExportRequest {
@@ -34,9 +33,8 @@ message TCreateExportRequest {
 message TEvCreateExportRequest {
     optional uint64 TxId = 1;
     optional string DatabaseName = 2;
-    optional TCreateExportRequest Request = 3;
     optional string UserSID = 4;
-    optional string PeerName = 5;
+    optional TCreateExportRequest Request = 3;
 }
 
 message TCreateExportResponse {
@@ -71,10 +69,8 @@ message TCancelExportRequest {
 
 message TEvCancelExportRequest {
     optional uint64 TxId = 1;
-    optional TCancelExportRequest Request = 2;
     optional string DatabaseName = 3;
-    optional string UserSID = 4;
-    optional string PeerName = 5;
+    optional TCancelExportRequest Request = 2;
 }
 
 message TCancelExportResponse {
@@ -93,10 +89,8 @@ message TForgetExportRequest {
 
 message TEvForgetExportRequest {
     optional uint64 TxId = 1;
-    optional TForgetExportRequest Request = 2;
     optional string DatabaseName = 3;
-    optional string UserSID = 4;
-    optional string PeerName = 5;
+    optional TForgetExportRequest Request = 2;
 }
 
 message TForgetExportResponse {

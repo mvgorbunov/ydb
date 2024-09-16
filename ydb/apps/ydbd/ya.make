@@ -1,8 +1,6 @@
 PROGRAM(ydbd)
 
-IF (NOT SANITIZER_TYPE)  # for some reasons some tests with asan are failed, see comment in CPPCOM-32
-    NO_EXPORT_DYNAMIC_SYMBOLS()
-ENDIF()
+NO_EXPORT_DYNAMIC_SYMBOLS()
 
 IF (OS_LINUX)
     ALLOCATOR(TCMALLOC_256K)

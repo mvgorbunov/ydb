@@ -31,7 +31,6 @@ namespace NActors {
         i16 SoftProcessingDurationTs = 0;
         EASProfile ActorSystemProfile = EASProfile::Default;
         bool HasSharedThread = false;
-        bool UseRingQueue = false;
     };
 
     struct TSharedExecutorPoolConfig {
@@ -48,7 +47,6 @@ namespace NActors {
         TString PoolName;
         ui32 Threads = 1;
         TCpuMask Affinity; // Executor thread affinity
-        bool UseRingQueue = false;
     };
 
     struct TSelfPingInfo {

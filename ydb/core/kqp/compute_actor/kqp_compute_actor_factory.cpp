@@ -89,8 +89,6 @@ class TKqpCaFactory : public IKqpNodeComputeActorFactory {
     std::atomic<ui64> MkqlHeavyProgramMemoryLimit = 0;
     std::atomic<ui64> MinChannelBufferSize = 0;
     std::atomic<ui64> ReasonableSpillingTreshold = 0;
-    std::atomic<ui64> MinMemAllocSize = 8_MB;
-    std::atomic<ui64> MinMemFreeSize = 32_MB;
 
 public:
     TKqpCaFactory(const NKikimrConfig::TTableServiceConfig::TResourceManager& config,
@@ -110,8 +108,6 @@ public:
         MkqlHeavyProgramMemoryLimit.store(config.GetMkqlHeavyProgramMemoryLimit());
         MinChannelBufferSize.store(config.GetMinChannelBufferSize());
         ReasonableSpillingTreshold.store(config.GetReasonableSpillingTreshold());
-        MinMemAllocSize.store(config.GetMinMemAllocSize());
-        MinMemFreeSize.store(config.GetMinMemFreeSize());
     }
 
     TActorStartResult CreateKqpComputeActor(TCreateArgs&& args) {
@@ -119,8 +115,6 @@ public:
         memoryLimits.ChannelBufferSize = 0;
         memoryLimits.MkqlLightProgramMemoryLimit = MkqlLightProgramMemoryLimit.load();
         memoryLimits.MkqlHeavyProgramMemoryLimit = MkqlHeavyProgramMemoryLimit.load();
-        memoryLimits.MinMemAllocSize = MinMemAllocSize.load();
-        memoryLimits.MinMemFreeSize = MinMemFreeSize.load();
 
         auto estimation = ResourceManager_->EstimateTaskResources(*args.Task, args.NumberOfTasks);
         NRm::TKqpResourcesRequest resourcesRequest;

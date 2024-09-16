@@ -1415,11 +1415,7 @@ void TTable::SetTableObserver(TIntrusivePtr<ITableObserver> ptr) noexcept
 void TPartStats::Add(const TPartView& partView)
 {
     PartsCount += 1;
-    if (partView->IndexPages.HasBTree()) {
-        BTreeIndexBytes += partView->IndexesRawSize;
-    } else {
-        FlatIndexBytes += partView->IndexesRawSize;
-    }
+    IndexBytes += partView->IndexesRawSize;
     ByKeyBytes += partView->ByKey ? partView->ByKey->Raw.size() : 0;
     PlainBytes += partView->Stat.Bytes;
     CodedBytes += partView->Stat.Coded;
@@ -1438,11 +1434,7 @@ void TPartStats::Add(const TPartView& partView)
 bool TPartStats::Remove(const TPartView& partView)
 {
     NUtil::SubSafe(PartsCount, ui64(1));
-    if (partView->IndexPages.HasBTree()) {
-        NUtil::SubSafe(BTreeIndexBytes, partView->IndexesRawSize);
-    } else {
-        NUtil::SubSafe(FlatIndexBytes, partView->IndexesRawSize);
-    }
+    NUtil::SubSafe(IndexBytes, partView->IndexesRawSize);
     NUtil::SubSafe(ByKeyBytes, partView->ByKey ? partView->ByKey->Raw.size() : 0);
     NUtil::SubSafe(PlainBytes, partView->Stat.Bytes);
     NUtil::SubSafe(CodedBytes, partView->Stat.Coded);
@@ -1471,8 +1463,7 @@ bool TPartStats::Remove(const TPartView& partView)
 TPartStats& TPartStats::operator+=(const TPartStats& rhs)
 {
     PartsCount += rhs.PartsCount;
-    FlatIndexBytes += rhs.FlatIndexBytes;
-    BTreeIndexBytes += rhs.BTreeIndexBytes;
+    IndexBytes += rhs.IndexBytes;
     OtherBytes += rhs.OtherBytes;
     ByKeyBytes += rhs.ByKeyBytes;
     PlainBytes += rhs.PlainBytes;
@@ -1489,8 +1480,7 @@ TPartStats& TPartStats::operator+=(const TPartStats& rhs)
 TPartStats& TPartStats::operator-=(const TPartStats& rhs)
 {
     NUtil::SubSafe(PartsCount, rhs.PartsCount);
-    NUtil::SubSafe(FlatIndexBytes, rhs.FlatIndexBytes);
-    NUtil::SubSafe(BTreeIndexBytes, rhs.BTreeIndexBytes);
+    NUtil::SubSafe(IndexBytes, rhs.IndexBytes);
     NUtil::SubSafe(OtherBytes, rhs.OtherBytes);
     NUtil::SubSafe(ByKeyBytes, rhs.ByKeyBytes);
     NUtil::SubSafe(PlainBytes, rhs.PlainBytes);

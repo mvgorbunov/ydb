@@ -180,7 +180,7 @@ namespace NKikimr::NBsController {
                     Response->MutableStatus()->RemoveLast();
                 }
 
-                State.emplace(*Self, Self->HostRecords, TActivationContext::Now(), TActivationContext::Monotonic());
+                State.emplace(*Self, Self->HostRecords, TActivationContext::Now());
                 State->CheckConsistency();
 
                 TString m;

@@ -6,8 +6,8 @@
 #include <ydb/library/actors/util/datetime.h>
 
 namespace NActors {
-    TIOExecutorPool::TIOExecutorPool(ui32 poolId, ui32 threads, const TString& poolName, TAffinity* affinity, bool useRingQueue)
-        : TExecutorPoolBase(poolId, threads, affinity, useRingQueue)
+    TIOExecutorPool::TIOExecutorPool(ui32 poolId, ui32 threads, const TString& poolName, TAffinity* affinity)
+        : TExecutorPoolBase(poolId, threads, affinity)
         , Threads(new TExecutorThreadCtx[threads])
         , PoolName(poolName)
     {}
@@ -17,8 +17,7 @@ namespace NActors {
             cfg.PoolId,
             cfg.Threads,
             cfg.PoolName,
-            new TAffinity(cfg.Affinity),
-            cfg.UseRingQueue
+            new TAffinity(cfg.Affinity)
         )
     {
         Harmonizer = harmonizer;
@@ -54,7 +53,7 @@ namespace NActors {
         }
 
         while (!StopFlag.load(std::memory_order_acquire)) {
-            if (const ui32 activation = std::visit([&revolvingCounter](auto &x){return x.Pop(++revolvingCounter);}, Activations)) {
+            if (const ui32 activation = Activations.Pop(++revolvingCounter)) {
                 return activation;
             }
             SpinLockPause();
@@ -87,9 +86,7 @@ namespace NActors {
     }
 
     void TIOExecutorPool::ScheduleActivationEx(ui32 activation, ui64 revolvingWriteCounter) {
-        std::visit([activation, revolvingWriteCounter](auto &x) {
-            x.Push(activation, revolvingWriteCounter);
-        }, Activations);
+        Activations.Push(activation, revolvingWriteCounter);
         const TAtomic x = AtomicIncrement(Semaphore);
         if (x <= 0) {
             for (;; ++revolvingWriteCounter) {

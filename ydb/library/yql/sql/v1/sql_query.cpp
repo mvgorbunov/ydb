@@ -1002,21 +1002,16 @@ bool TSqlQuery::Statement(TVector<TNodePtr>& blocks, const TRule_sql_stmt_core& 
         }
         case TRule_sql_stmt_core::kAltSqlStmtCore35: {
             Ctx.BodyPart();
-            // create_topic_stmt: CREATE TOPIC (IF NOT EXISTS)? topic1 (CONSUMER ...)? [WITH (opt1 = val1, ...]?
+            // create_topic_stmt: CREATE TOPIC topic1 (CONSUMER ...)? [WITH (opt1 = val1, ...]?
             auto& rule = core.GetAlt_sql_stmt_core35().GetRule_create_topic_stmt1();
             TTopicRef tr;
-            if (!TopicRefImpl(rule.GetRule_topic_ref4(), tr)) {
+            if (!TopicRefImpl(rule.GetRule_topic_ref3(), tr)) {
                 return false;
-            }
-            bool existingOk = false;
-            if (rule.HasBlock3()) { // if not exists
-                existingOk = true;
             }
 
             TCreateTopicParameters params;
-            params.ExistingOk = existingOk;
-            if (rule.HasBlock5()) { //create_topic_entry (consumers)
-                auto& entries = rule.GetBlock5().GetRule_create_topic_entries1();
+            if (rule.HasBlock4()) { //create_topic_entry (consumers)
+                auto& entries = rule.GetBlock4().GetRule_create_topic_entries1();
                 auto& firstEntry = entries.GetRule_create_topic_entry2();
                 if (!CreateTopicEntry(firstEntry, params)) {
                     return false;
@@ -1029,8 +1024,8 @@ bool TSqlQuery::Statement(TVector<TNodePtr>& blocks, const TRule_sql_stmt_core& 
                 }
 
             }
-            if (rule.HasBlock6()) { // with_topic_settings
-                auto& topic_settings_node = rule.GetBlock6().GetRule_with_topic_settings1().GetRule_topic_settings3();
+            if (rule.HasBlock5()) { // with_topic_settings
+                auto& topic_settings_node = rule.GetBlock5().GetRule_with_topic_settings1().GetRule_topic_settings3();
                 CreateTopicSettings(topic_settings_node, params.TopicSettings);
             }
 
@@ -1039,26 +1034,20 @@ bool TSqlQuery::Statement(TVector<TNodePtr>& blocks, const TRule_sql_stmt_core& 
         }
         case TRule_sql_stmt_core::kAltSqlStmtCore36: {
 //            alter_topic_stmt: ALTER TOPIC topic_ref alter_topic_action (COMMA alter_topic_action)*;
-//            alter_topic_stmt: ALTER TOPIC IF EXISTS topic_ref alter_topic_action (COMMA alter_topic_action)*;
 
             Ctx.BodyPart();
             auto& rule = core.GetAlt_sql_stmt_core36().GetRule_alter_topic_stmt1();
             TTopicRef tr;
-            bool missingOk = false;
-            if (rule.HasBlock3()) { // IF EXISTS
-                missingOk = true;
-            }
-            if (!TopicRefImpl(rule.GetRule_topic_ref4(), tr)) {
+            if (!TopicRefImpl(rule.GetRule_topic_ref3(), tr)) {
                 return false;
             }
 
             TAlterTopicParameters params;
-            params.MissingOk = missingOk;
-            auto& firstEntry = rule.GetRule_alter_topic_action5();
+            auto& firstEntry = rule.GetRule_alter_topic_action4();
             if (!AlterTopicAction(firstEntry, params)) {
                 return false;
             }
-            const auto& list = rule.GetBlock6();
+            const auto& list = rule.GetBlock5();
             for (auto& node : list) {
                 if (!AlterTopicAction(node.GetRule_alter_topic_action2(), params)) {
                     return false;
@@ -1069,22 +1058,15 @@ bool TSqlQuery::Statement(TVector<TNodePtr>& blocks, const TRule_sql_stmt_core& 
             break;
         }
         case TRule_sql_stmt_core::kAltSqlStmtCore37: {
-            // drop_topic_stmt: DROP TOPIC (IF EXISTS)? topic_ref;
+            // drop_topic_stmt: DROP TOPIC
             Ctx.BodyPart();
             const auto& rule = core.GetAlt_sql_stmt_core37().GetRule_drop_topic_stmt1();
 
-            TDropTopicParameters params;
-            if (rule.HasBlock3()) { // IF EXISTS
-                params.MissingOk = true;
-            } else {
-                params.MissingOk = false;
-            }
-
             TTopicRef tr;
-            if (!TopicRefImpl(rule.GetRule_topic_ref4(), tr)) {
+            if (!TopicRefImpl(rule.GetRule_topic_ref3(), tr)) {
                 return false;
             }
-            AddStatementToBlocks(blocks, BuildDropTopic(Ctx.Pos(), tr, params, Ctx.Scoped));
+            AddStatementToBlocks(blocks, BuildDropTopic(Ctx.Pos(), tr, Ctx.Scoped));
             break;
         }
         case TRule_sql_stmt_core::kAltSqlStmtCore38: {

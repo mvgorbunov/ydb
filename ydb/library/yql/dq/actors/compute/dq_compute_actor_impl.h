@@ -1367,7 +1367,6 @@ protected:
                         .TaskParams = taskParams,
                         .TypeEnv = typeEnv,
                         .HolderFactory = holderFactory,
-                        .Alloc = Alloc,
                         .RandomProvider = randomProvider
                     });
             } catch (const std::exception& ex) {

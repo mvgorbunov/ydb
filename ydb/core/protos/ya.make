@@ -51,7 +51,6 @@ SRCS(
     counters_kesus.proto
     counters_keyvalue.proto
     counters_mediator.proto
-    counters_node_broker.proto
     counters_pq.proto
     counters_replication.proto
     counters_schemeshard.proto

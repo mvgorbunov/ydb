@@ -210,7 +210,6 @@ ui64 CalcRequestUnit(const TKqpQueryStats& stats) {
 NKqpProto::TKqpStatsQuery TKqpQueryStats::ToProto() const {
     NKqpProto::TKqpStatsQuery result;
     result.SetDurationUs(DurationUs);
-    result.SetQueuedTimeUs(QueuedTimeUs);
 
     if (Compilation) {
         result.MutableCompilation()->SetFromCache(Compilation->FromCache);

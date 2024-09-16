@@ -24,8 +24,8 @@
 
 namespace {
     constexpr i64 kInFlightMemoryLimitPerActor = 64_MB;
-    constexpr i64 kMemoryLimitPerMessage = 64_MB;
-    constexpr i64 kMaxBatchesPerMessage = 8;
+    constexpr i64 kMemoryLimitPerMessage = 48_MB;
+    constexpr i64 kMaxBatchesPerMessage = 1;
 
     struct TWriteActorBackoffSettings {
         TDuration StartRetryDelay = TDuration::MilliSeconds(250);
@@ -81,12 +81,12 @@ namespace {
 namespace NKikimr {
 namespace NKqp {
 
-class TKqpDirectWriteActor : public TActorBootstrapped<TKqpDirectWriteActor>, public NYql::NDq::IDqComputeActorAsyncOutput {
-    using TBase = TActorBootstrapped<TKqpDirectWriteActor>;
+class TKqpWriteActor : public TActorBootstrapped<TKqpWriteActor>, public NYql::NDq::IDqComputeActorAsyncOutput {
+    using TBase = TActorBootstrapped<TKqpWriteActor>;
 
     class TResumeNotificationManager {
     public:
-        TResumeNotificationManager(TKqpDirectWriteActor& writer)
+        TResumeNotificationManager(TKqpWriteActor& writer)
             : Writer(writer) {
             CheckMemory();
         }
@@ -102,7 +102,7 @@ class TKqpDirectWriteActor : public TActorBootstrapped<TKqpDirectWriteActor>, pu
         }
 
     private:
-        TKqpDirectWriteActor& Writer;
+        TKqpWriteActor& Writer;
         i64 LastFreeMemory = std::numeric_limits<i64>::max();
     };
 
@@ -127,7 +127,7 @@ class TKqpDirectWriteActor : public TActorBootstrapped<TKqpDirectWriteActor>, pu
     };
 
 public:
-    TKqpDirectWriteActor(
+    TKqpWriteActor(
         NKikimrKqp::TKqpTableSinkSettings&& settings,
         NYql::NDq::TDqAsyncIoFactory::TSinkArguments&& args,
         TIntrusivePtr<TKqpCounters> counters)
@@ -137,7 +137,6 @@ public:
         , Callbacks(args.Callback)
         , Counters(counters)
         , TypeEnv(args.TypeEnv)
-        , Alloc(args.Alloc)
         , TxId(args.TxId)
         , TableId(
             Settings.GetTable().GetOwnerId(),
@@ -158,13 +157,13 @@ public:
     void Bootstrap() {
         LogPrefix = TStringBuilder() << "SelfId: " << this->SelfId() << ", " << LogPrefix;
         ResolveTable();
-        Become(&TKqpDirectWriteActor::StateFunc);
+        Become(&TKqpWriteActor::StateFunc);
     }
 
     static constexpr char ActorName[] = "KQP_WRITE_ACTOR";
 
 private:
-    virtual ~TKqpDirectWriteActor() {
+    virtual ~TKqpWriteActor() {
     }
 
     void CommitState(const NYql::NDqProto::TCheckpoint&) final {};
@@ -492,7 +491,7 @@ private:
             << ", Cookie=" << ev->Cookie
             << ", LocksCount=" << ev->Get()->Record.GetTxLocks().size());
 
-        OnMessageAcknowledged(ev->Get()->Record.GetOrigin(), ev->Cookie);
+        PopShardBatch(ev->Get()->Record.GetOrigin(), ev->Cookie);
 
         for (const auto& lock : ev->Get()->Record.GetTxLocks()) {
             LocksInfo[ev->Get()->Record.GetOrigin()].AddAndCheckLock(lock);
@@ -501,7 +500,7 @@ private:
         ProcessBatches();
     }
 
-    void OnMessageAcknowledged(ui64 shardId, ui64 cookie) {
+    void PopShardBatch(ui64 shardId, ui64 cookie) {
         TResumeNotificationManager resumeNotificator(*this);
         const auto removedDataSize = ShardedWriteController->OnMessageAcknowledged(shardId, cookie);
         if (removedDataSize) {
@@ -670,7 +669,7 @@ private:
 
     void PassAway() override {
         Send(PipeCacheId, new TEvPipeCache::TEvUnlink(0));
-        TActorBootstrapped<TKqpDirectWriteActor>::PassAway();
+        TActorBootstrapped<TKqpWriteActor>::PassAway();
     }
 
     void Prepare() {
@@ -694,8 +693,7 @@ private:
                             : kMaxBatchesPerMessage),
                     },
                     std::move(columnsMetadata),
-                    TypeEnv,
-                    Alloc);
+                    TypeEnv);
             } catch (...) {
                 RuntimeError(
                     CurrentExceptionMessage(),
@@ -723,6 +721,7 @@ private:
         Callbacks->ResumeExecution();
     }
 
+    NActors::TActorId TxProxyId = MakeTxProxyID();
     NActors::TActorId PipeCacheId = NKikimr::MakePipePerNodeCacheID(false);
 
     TString LogPrefix;
@@ -732,7 +731,6 @@ private:
     NYql::NDq::IDqComputeActorAsyncOutput::ICallbacks * Callbacks = nullptr;
     TIntrusivePtr<TKqpCounters> Counters;
     const NMiniKQL::TTypeEnvironment& TypeEnv;
-    std::shared_ptr<NKikimr::NMiniKQL::TScopedAlloc> Alloc;
 
     const NYql::NDq::TTxId TxId;
     const TTableId TableId;
@@ -756,7 +754,7 @@ void RegisterKqpWriteActor(NYql::NDq::TDqAsyncIoFactory& factory, TIntrusivePtr<
     factory.RegisterSink<NKikimrKqp::TKqpTableSinkSettings>(
         TString(NYql::KqpTableSinkName),
         [counters] (NKikimrKqp::TKqpTableSinkSettings&& settings, NYql::NDq::TDqAsyncIoFactory::TSinkArguments&& args) {
-            auto* actor = new TKqpDirectWriteActor(std::move(settings), std::move(args), counters);
+            auto* actor = new TKqpWriteActor(std::move(settings), std::move(args), counters);
             return std::make_pair<NYql::NDq::IDqComputeActorAsyncOutput*, NActors::IActor*>(actor, actor);
         });
 }

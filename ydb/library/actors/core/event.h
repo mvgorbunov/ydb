@@ -68,9 +68,6 @@ namespace NActors {
         };
 
     public:
-        typedef TAutoPtr<IEventHandle> TPtr;
-
-    public:
         template <typename TEv>
         inline TEv* CastAsLocal() const noexcept {
             auto fits = GetTypeRewrite() == TEv::EventType;
@@ -352,10 +349,6 @@ namespace NActors {
     template <typename TEventType>
     class TEventHandle: public IEventHandle {
         TEventHandle(); // we never made instance of TEventHandle
-
-    public:
-        typedef TAutoPtr<TEventHandle<TEventType>> TPtr;
-
     public:
         TEventType* Get() {
             return IEventHandle::Get<TEventType>();
@@ -378,7 +371,7 @@ namespace NActors {
         // still abstract
 
         typedef TEventHandle<TEventType> THandle;
-        typedef typename THandle::TPtr TPtr;
+        typedef TAutoPtr<THandle> TPtr;
     };
 
 #define DEFINE_SIMPLE_LOCAL_EVENT(eventType, header)                    \

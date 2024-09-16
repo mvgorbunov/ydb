@@ -55,10 +55,6 @@ void TSchemeShard::FromXxportInfo(NKikimrImport::TImport& import, const TImportI
         *import.MutableEndTime() = SecondsToProtoTimeStamp(importInfo->EndTime.Seconds());
     }
 
-    if (importInfo->UserSID) {
-        import.SetUserSID(*importInfo->UserSID);
-    }
-
     switch (importInfo->State) {
     case TImportInfo::EState::Waiting:
         switch (GetMinState(importInfo)) {

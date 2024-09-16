@@ -21,5 +21,4 @@ RECURSE(
     rate_limiter
     replication
     ydb
-    ymq
 )

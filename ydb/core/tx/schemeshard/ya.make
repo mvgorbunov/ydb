@@ -207,7 +207,6 @@ SRCS(
     schemeshard_utils.cpp
     schemeshard_utils.h
     schemeshard_bg_tasks__list.cpp
-    schemeshard_xxport__helpers.cpp
     schemeshard_export__cancel.cpp
     schemeshard_export__create.cpp
     schemeshard_export__forget.cpp

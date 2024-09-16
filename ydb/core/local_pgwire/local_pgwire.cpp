@@ -18,8 +18,33 @@ class TPgYdbProxy : public TActor<TPgYdbProxy> {
     using TBase = TActor<TPgYdbProxy>;
 
     struct TSecurityState {
-        TString SerializedToken;
         TString Ticket;
+        Ydb::Auth::LoginResult LoginResult;
+        TEvTicketParser::TError Error;
+        TIntrusiveConstPtr<NACLib::TUserToken> Token;
+        TString SerializedToken;
+    };
+
+    struct TTokenState {
+        std::unordered_set<TActorId> Senders;
+    };
+
+    struct TEvPrivate {
+        enum EEv {
+            EvTokenReady = EventSpaceBegin(NActors::TEvents::ES_PRIVATE),
+            EvEnd
+        };
+
+        static_assert(EvEnd < EventSpaceEnd(NActors::TEvents::ES_PRIVATE), "expect EvEnd < EventSpaceEnd(NActors::TEvents::ES_PRIVATE)");
+
+        struct TEvTokenReady : TEventLocal<TEvTokenReady, EvTokenReady> {
+            Ydb::Auth::LoginResult LoginResult;
+            TActorId Sender;
+            TString Database;
+            TString PeerName;
+
+            TEvTokenReady() = default;
+        };
     };
 
     struct TConnectionState {
@@ -29,6 +54,7 @@ class TPgYdbProxy : public TActor<TPgYdbProxy> {
 
     std::unordered_map<TActorId, TConnectionState> ConnectionState;
     std::unordered_map<TActorId, TSecurityState> SecurityState;
+    std::unordered_map<TString, TTokenState> TokenState;
     uint32_t ConnectionNum = 0;
 
 public:
@@ -37,24 +63,85 @@ public:
     {
     }
 
-    void Handle(NPG::TEvPGEvents::TEvAuth::TPtr& ev) {
-        BLOG_D("TEvAuth " << ev->Get()->InitialMessage->Dump() << " cookie " << ev->Cookie);
-        std::unordered_map<TString, TString> clientParams = ev->Get()->InitialMessage->GetClientParams();
-        TPgWireAuthData pgWireAuthData;
-        pgWireAuthData.UserName = clientParams["user"];
-        if (ev->Get()->PasswordMessage) {
-            pgWireAuthData.Password = TString(ev->Get()->PasswordMessage->GetPassword());
+    void Handle(TEvTicketParser::TEvAuthorizeTicketResult::TPtr& ev) {
+        auto token = ev->Get()->Ticket;
+        auto itTokenState = TokenState.find(token);
+        if (itTokenState == TokenState.end()) {
+            BLOG_W("Couldn't find token in reply from TicketParser");
+            return;
         }
-        pgWireAuthData.Sender = ev->Sender;
-        pgWireAuthData.DatabasePath = clientParams["database"];
-        if (pgWireAuthData.DatabasePath == "/postgres") {
+        for (auto sender : itTokenState->second.Senders) {
+            auto& securityState(SecurityState[sender]);
+            securityState.Ticket = token;
+            securityState.Error = ev->Get()->Error;
+            securityState.Token = ev->Get()->Token;
+            securityState.SerializedToken = ev->Get()->SerializedToken;
+            auto authResponse = std::make_unique<NPG::TEvPGEvents::TEvAuthResponse>();
+            if (ev->Get()->Error) {
+                authResponse->Error = ev->Get()->Error.Message;
+            }
+            Send(sender, authResponse.release());
+        }
+        TokenState.erase(itTokenState);
+    }
+
+    void Handle(TEvPrivate::TEvTokenReady::TPtr& ev) {
+        auto token = ev->Get()->LoginResult.token();
+        auto itTokenState = TokenState.find(token);
+        if (itTokenState == TokenState.end()) {
+            itTokenState = TokenState.insert({token, {}}).first;
+        }
+        bool needSend = itTokenState->second.Senders.empty();
+        itTokenState->second.Senders.insert(ev->Get()->Sender);
+        if (needSend) {
+            Send(MakeTicketParserID(), new TEvTicketParser::TEvAuthorizeTicket({
+                .Database = ev->Get()->Database,
+                .Ticket = token,
+                .PeerName = ev->Get()->PeerName,
+            }));
+        }
+        SecurityState[ev->Get()->Sender].LoginResult = std::move(ev->Get()->LoginResult);
+    }
+
+    void Handle(NPG::TEvPGEvents::TEvAuth::TPtr& ev) {
+        std::unordered_map<TString, TString> clientParams = ev->Get()->InitialMessage->GetClientParams();
+        BLOG_D("TEvAuth " << ev->Get()->InitialMessage->Dump() << " cookie " << ev->Cookie);
+        Ydb::Auth::LoginRequest request;
+        request.set_user(clientParams["user"]);
+        if (ev->Get()->PasswordMessage) {
+            request.set_password(TString(ev->Get()->PasswordMessage->GetPassword()));
+        }
+        TActorSystem* actorSystem = TActivationContext::ActorSystem();
+        TActorId sender = ev->Sender;
+        TString database = clientParams["database"];
+        if (database == "/postgres") {
             auto authResponse = std::make_unique<NPG::TEvPGEvents::TEvAuthResponse>();
             authResponse->Error = Ydb::StatusIds_StatusCode_Name(Ydb::StatusIds_StatusCode::StatusIds_StatusCode_BAD_REQUEST);
-            Send(pgWireAuthData.Sender, authResponse.release());
+            actorSystem->Send(sender, authResponse.release());
         }
-        pgWireAuthData.PeerName = TStringBuilder() << ev->Get()->Address;
+        TString peerName = TStringBuilder() << ev->Get()->Address;
 
-        Register(CreateLocalPgWireAuthActor(pgWireAuthData, SelfId()));
+        using TRpcEv = NGRpcService::TGRpcRequestWrapperNoAuth<NGRpcService::TRpcServices::EvLogin, Ydb::Auth::LoginRequest, Ydb::Auth::LoginResponse>;
+        auto rpcFuture = NRpcService::DoLocalRpc<TRpcEv>(std::move(request), database, {}, actorSystem);
+        rpcFuture.Subscribe([actorSystem, sender, database, peerName, selfId = SelfId()](const NThreading::TFuture<Ydb::Auth::LoginResponse>& future) {
+            auto& response = future.GetValueSync();
+            if (response.operation().status() == Ydb::StatusIds::SUCCESS) {
+                auto tokenReady = std::make_unique<TEvPrivate::TEvTokenReady>();
+                response.operation().result().UnpackTo(&(tokenReady->LoginResult));
+                tokenReady->Sender = sender;
+                tokenReady->Database = database;
+                tokenReady->PeerName = peerName;
+                actorSystem->Send(selfId, tokenReady.release());
+            } else {
+                auto authResponse = std::make_unique<NPG::TEvPGEvents::TEvAuthResponse>();
+                if (response.operation().issues_size() > 0) {
+                    authResponse->Error = response.operation().issues(0).message();
+                } else {
+                    authResponse->Error = Ydb::StatusIds_StatusCode_Name(response.operation().status());
+                }
+                actorSystem->Send(sender, authResponse.release());
+            }
+        });
     }
 
     void Handle(NPG::TEvPGEvents::TEvConnectionOpened::TPtr& ev) {
@@ -86,6 +173,7 @@ public:
         }
         SecurityState.erase(ev->Sender);
         ConnectionState.erase(itConnection);
+        // TODO: cleanup TokenState too
     }
 
     void Handle(NPG::TEvPGEvents::TEvQuery::TPtr& ev) {
@@ -148,18 +236,6 @@ public:
         }
     }
 
-    void Handle(TEvEvents::TEvAuthResponse::TPtr& ev) {
-        auto& securityState = SecurityState[ev->Get()->Sender];
-        auto authResponse = std::make_unique<NPG::TEvPGEvents::TEvAuthResponse>();
-        if (!ev->Get()->ErrorMessage.empty()) {
-            authResponse->Error = ev->Get()->ErrorMessage;
-        } else {
-            securityState.SerializedToken = ev->Get()->SerializedToken;
-            securityState.Ticket = ev->Get()->Ticket;
-        }
-        Send(ev->Get()->Sender, authResponse.release());
-    }
-
     STATEFN(StateWork) {
         switch (ev->GetTypeRewrite()) {
             hFunc(NPG::TEvPGEvents::TEvAuth, Handle);
@@ -172,7 +248,8 @@ public:
             hFunc(NPG::TEvPGEvents::TEvExecute, Handle);
             hFunc(NPG::TEvPGEvents::TEvClose, Handle);
             hFunc(NPG::TEvPGEvents::TEvCancelRequest, Handle);
-            hFunc(TEvEvents::TEvAuthResponse, Handle);
+            hFunc(TEvPrivate::TEvTokenReady, Handle);
+            hFunc(TEvTicketParser::TEvAuthorizeTicketResult, Handle);
         }
     }
 };

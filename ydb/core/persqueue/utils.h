@@ -1,7 +1,5 @@
 #pragma once
 
-#include <deque>
-#include <util/datetime/base.h>
 #include <util/string/builder.h>
 #include <ydb/core/protos/flat_scheme_op.pb.h>
 #include <ydb/core/protos/pqconfig.pb.h>
@@ -12,8 +10,6 @@ ui64 TopicPartitionReserveSize(const NKikimrPQ::TPQTabletConfig& config);
 ui64 TopicPartitionReserveThroughput(const NKikimrPQ::TPQTabletConfig& config);
 
 bool SplitMergeEnabled(const NKikimrPQ::TPQTabletConfig& config);
-
-size_t CountActivePartitions(const ::google::protobuf::RepeatedPtrField< ::NKikimrPQ::TPQTabletConfig_TPartition >& partitions);
 
 ui64 PutUnitsSize(const ui64 size);
 
@@ -59,9 +55,7 @@ public:
 
     const Node* GetPartition(ui32 id) const;
     std::set<ui32> GetActiveChildren(ui32 id) const;
-
-    void Travers(const std::function<bool (ui32 id)>& func) const;
-    void Travers(ui32 id, const std::function<bool (ui32 id)>& func, bool includeSelf = false) const;
+    void Travers(ui32 id, std::function<bool (ui32 id)> func, bool includeSelf = false) const;
 
 private:
     std::unordered_map<ui32, Node> Partitions;
@@ -70,21 +64,5 @@ private:
 TPartitionGraph MakePartitionGraph(const NKikimrPQ::TPQTabletConfig& config);
 TPartitionGraph MakePartitionGraph(const NKikimrPQ::TUpdateBalancerConfig& config);
 TPartitionGraph MakePartitionGraph(const NKikimrSchemeOp::TPersQueueGroupDescription& config);
-
-class TLastCounter {
-    static constexpr size_t MaxValueCount = 2;
-
-public:
-    void Use(const TString& value, const TInstant& now);
-    size_t Count(const TInstant& expirationTime);
-
-private:
-    struct Data {
-        TInstant LastUseTime;
-        TString Value;
-    };
-    std::deque<Data> Values;
-};
-
 
 } // NKikimr::NPQ

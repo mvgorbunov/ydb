@@ -25,7 +25,7 @@ public:
     virtual void Finish() = 0;
 
     /// Send reply to client.
-    virtual void Reply(TResponse&& resp) = 0;
+    virtual void Reply(const TResponse& resp) = 0;
 
     virtual void ReadyForNextRead() = 0;
 
@@ -120,7 +120,7 @@ protected:
                     Session->Stream.Finish(Status::OK, new TFinishDone(Session));
                 }
             } else {
-                auto resp = std::move(Session->Responses.front());
+                auto resp = Session->Responses.front();
                 Session->Responses.pop();
                 lock.Release();
                 ui64 sz = resp.ByteSize();
@@ -253,7 +253,7 @@ protected:
         TResponse response;
         response.MutableError()->SetDescription(description);
         response.MutableError()->SetCode(code);
-        Reply(std::move(response));
+        Reply(response);
         Finish();
     }
 
@@ -274,13 +274,13 @@ protected:
     }
 
     /// Send reply to client.
-    void Reply(TResponse&& resp) override {
+    void Reply(const TResponse& resp) override {
         {
             TGuard<TSpinLock> lock(Lock);
             if (NeedFinish) //ignore responses after finish
                 return;
             if (HaveWriteInflight || !Responses.empty()) {
-                Responses.push(std::move(resp));
+                Responses.push(resp);
                 return;
             } else {
                 HaveWriteInflight = true;
@@ -306,10 +306,10 @@ protected:
 protected:
     grpc::ServerCompletionQueue* const CQ;
     grpc::ServerContext Context;
-    grpc::ServerAsyncReaderWriter<TResponse, TRequest> Stream;
-
-    TSpinLock Lock;
+    grpc::ServerAsyncReaderWriter<TResponse, TRequest>
+            Stream;
 private:
+    TSpinLock Lock;
     bool HaveWriteInflight;
     bool NeedFinish;
     std::atomic<bool> ClientIsDone;

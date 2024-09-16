@@ -1,9 +1,10 @@
 LIBRARY()
 
 SRCS(
-    audit_log.h
-    audit_log_service.h
     audit_log_impl.cpp
+    audit_log_impl.h
+    audit_log.cpp
+    audit_log.h
 )
 
 PEERDIR(

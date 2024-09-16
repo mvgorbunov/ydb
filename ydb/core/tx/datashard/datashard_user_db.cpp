@@ -62,7 +62,7 @@ ui64 CalculateValueBytes(const TArrayRef<const NIceDb::TUpdateOp> ops) {
     return bytes;
 };
 
-void TDataShardUserDb::UpsertRow(
+void TDataShardUserDb::UpdateRow(
     const TTableId& tableId,
     const TArrayRef<const TRawTypeValue> key,
     const TArrayRef<const NIceDb::TUpdateOp> ops)
@@ -108,11 +108,11 @@ void TDataShardUserDb::UpsertRow(
         if (specUpdates.ColIdUpdateNo != Max<ui32>()) {
             addExtendedOp(specUpdates.ColIdUpdateNo, specUpdates.UpdateNo);
         }
-        UpsertRowInt(NTable::ERowOp::Upsert, tableId, localTableId, key, extendedOps);
+        UpdateRowInt(NTable::ERowOp::Upsert, tableId, localTableId, key, extendedOps);
 
         IncreaseUpdateCounters(key, extendedOps);
     } else {
-        UpsertRowInt(NTable::ERowOp::Upsert, tableId, localTableId, key, ops);
+        UpdateRowInt(NTable::ERowOp::Upsert, tableId, localTableId, key, ops);
 
         IncreaseUpdateCounters(key, ops);
     }
@@ -126,7 +126,7 @@ void TDataShardUserDb::ReplaceRow(
     auto localTableId = Self.GetLocalTableId(tableId);
     Y_ABORT_UNLESS(localTableId != 0, "Unexpected ReplaceRow for an unknown table");
 
-    UpsertRowInt(NTable::ERowOp::Reset, tableId, localTableId, key, ops);
+    UpdateRowInt(NTable::ERowOp::Reset, tableId, localTableId, key, ops);
 
     IncreaseUpdateCounters(key, ops);
 }
@@ -139,26 +139,9 @@ void TDataShardUserDb::InsertRow(
     auto localTableId = Self.GetLocalTableId(tableId);
     Y_ABORT_UNLESS(localTableId != 0, "Unexpected InsertRow for an unknown table");
 
-    if (RowExists(tableId, key))
-        throw TUniqueConstrainException();
+    EnsureMissingRow(tableId, key);
 
-    UpsertRowInt(NTable::ERowOp::Upsert, tableId, localTableId, key, ops);
-
-    IncreaseUpdateCounters(key, ops);
-}
-
-void TDataShardUserDb::UpdateRow(
-    const TTableId& tableId,
-    const TArrayRef<const TRawTypeValue> key,
-    const TArrayRef<const NIceDb::TUpdateOp> ops)
-{
-    auto localTableId = Self.GetLocalTableId(tableId);
-    Y_ABORT_UNLESS(localTableId != 0, "Unexpected UpdateRow for an unknown table");
-
-    if (!RowExists(tableId, key))
-        return;
-
-    UpsertRowInt(NTable::ERowOp::Upsert, tableId, localTableId, key, ops);
+    UpdateRowInt(NTable::ERowOp::Upsert, tableId, localTableId, key, ops);
 
     IncreaseUpdateCounters(key, ops);
 }
@@ -170,7 +153,7 @@ void TDataShardUserDb::EraseRow(
     auto localTableId = Self.GetLocalTableId(tableId);
     Y_ABORT_UNLESS(localTableId != 0, "Unexpected UpdateRow for an unknown table");
 
-    UpsertRowInt(NTable::ERowOp::Erase, tableId, localTableId, key, {});
+    UpdateRowInt(NTable::ERowOp::Erase, tableId, localTableId, key, {});
 
     ui64 keyBytes = CalculateKeyBytes(key);
     
@@ -189,7 +172,7 @@ void TDataShardUserDb::IncreaseUpdateCounters(
     Counters.UpdateRowBytes += keyBytes + valueBytes;
 }
 
-void TDataShardUserDb::UpsertRowInt(
+void TDataShardUserDb::UpdateRowInt(
     NTable::ERowOp rowOp,
     const TTableId& tableId,
     ui64 localTableId,
@@ -233,7 +216,7 @@ void TDataShardUserDb::UpsertRowInt(
     Self.GetKeyAccessSampler()->AddSample(tableId, keyCells);
 }
 
-bool TDataShardUserDb::RowExists (
+void TDataShardUserDb::EnsureMissingRow (
     const TTableId& tableId,
     const TArrayRef<const TRawTypeValue> key) 
 {
@@ -244,10 +227,12 @@ bool TDataShardUserDb::RowExists (
             throw TNotReadyTabletException();
         }
         case NTable::EReady::Data: {
-            return true;
+            if (rowState == NTable::ERowOp::Upsert)
+                throw TUniqueConstrainException();
+            break;
         }
         case NTable::EReady::Gone: {
-            return false;
+            break;
         }
     }
 }

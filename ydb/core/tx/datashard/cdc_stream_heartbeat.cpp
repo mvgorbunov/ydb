@@ -95,27 +95,27 @@ void TDataShard::EmitHeartbeats() {
         return;
     }
 
-    // We may possibly have more writes at this version
-    TRowVersion edge = GetMvccTxVersion(EMvccTxMode::ReadWrite);
-    bool wait = true;
-
     if (const auto& plan = TransQueue.GetPlan()) {
-        edge = Min(edge, plan.begin()->ToRowVersion());
-        wait = false;
+        const auto version = Min(plan.begin()->ToRowVersion(), VolatileTxManager.GetMinUncertainVersion());
+        if (CdcStreamHeartbeatManager.ShouldEmitHeartbeat(version)) {
+            return Execute(new TTxCdcStreamEmitHeartbeats(this, version));
+        }
+        return;
     }
 
     if (auto version = VolatileTxManager.GetMinUncertainVersion(); !version.IsMax()) {
-        edge = Min(edge, version);
-        wait = false;
+        if (CdcStreamHeartbeatManager.ShouldEmitHeartbeat(version)) {
+            return Execute(new TTxCdcStreamEmitHeartbeats(this, version));
+        }
+        return;
     }
 
-    if (CdcStreamHeartbeatManager.ShouldEmitHeartbeat(edge)) {
-        return Execute(new TTxCdcStreamEmitHeartbeats(this, edge));
+    const TRowVersion nextWrite = GetMvccTxVersion(EMvccTxMode::ReadWrite);
+    if (CdcStreamHeartbeatManager.ShouldEmitHeartbeat(nextWrite)) {
+        return Execute(new TTxCdcStreamEmitHeartbeats(this, nextWrite));
     }
 
-    if (wait) {
-        WaitPlanStep(lowest.Next().Step);
-    }
+    WaitPlanStep(lowest.Next().Step);
 }
 
 void TCdcStreamHeartbeatManager::Reset() {
@@ -215,7 +215,7 @@ bool TCdcStreamHeartbeatManager::ShouldEmitHeartbeat(const TRowVersion& edge) co
         return false;
     }
 
-    if (Schedule.top().Version >= edge) {
+    if (Schedule.top().Version > edge) {
         return false;
     }
 
@@ -225,7 +225,7 @@ bool TCdcStreamHeartbeatManager::ShouldEmitHeartbeat(const TRowVersion& edge) co
 THashMap<TPathId, TCdcStreamHeartbeatManager::THeartbeatInfo> TCdcStreamHeartbeatManager::EmitHeartbeats(
         NTable::TDatabase& db, const TRowVersion& edge)
 {
-    if (!ShouldEmitHeartbeat(edge)) {
+    if (Schedule.empty() || Schedule.top().Version > edge) {
         return {};
     }
 
@@ -234,7 +234,7 @@ THashMap<TPathId, TCdcStreamHeartbeatManager::THeartbeatInfo> TCdcStreamHeartbea
 
     while (true) {
         const auto& top = Schedule.top();
-        if (top.Version >= edge) {
+        if (top.Version > edge) {
             break;
         }
 

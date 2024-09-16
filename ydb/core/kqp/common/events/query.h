@@ -1,5 +1,4 @@
 #pragma once
-#include <ydb/core/resource_pools/resource_pool_settings.h>
 #include <ydb/core/protos/kqp.pb.h>
 #include <ydb/core/kqp/common/simple/kqp_event_ids.h>
 #include <ydb/core/kqp/common/kqp_user_request_context.h>
@@ -343,14 +342,6 @@ public:
         return Record.GetRequest().GetPoolId();
     }
 
-    void SetPoolConfig(const NResourcePool::TPoolSettings& config) {
-        PoolConfig = config;
-    }
-
-    std::optional<NResourcePool::TPoolSettings> GetPoolConfig() const {
-        return PoolConfig;
-    }
-
     mutable NKikimrKqp::TEvQueryRequest Record;
 
 private:
@@ -379,7 +370,6 @@ private:
     TDuration CancelAfter;
     TIntrusivePtr<TUserRequestContext> UserRequestContext;
     TDuration ProgressStatsPeriod;
-    std::optional<NResourcePool::TPoolSettings> PoolConfig;
 };
 
 struct TEvDataQueryStreamPart: public TEventPB<TEvDataQueryStreamPart,

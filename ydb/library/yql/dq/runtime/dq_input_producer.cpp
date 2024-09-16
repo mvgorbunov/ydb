@@ -433,10 +433,6 @@ private:
             return CurrBlockIndex_ >= BlockLen_;
         }
 
-        bool IsFinished() const {
-            return IsFinished_;
-        }
-
         void NextRow() {
             Y_DEBUG_ABORT_UNLESS(!IsEmpty());
             ++CurrBlockIndex_;
@@ -649,7 +645,7 @@ private:
             input.NextRow();
             InputRows_.pop_back();
             if (input.IsEmpty()) {
-                auto status = FetchInput(inputIndex);
+                auto status = input.FetchNext();
                 if (status == NUdf::EFetchStatus::Yield) {
                     StartInputIndex_ = inputIndex;
                     return status;
@@ -661,7 +657,6 @@ private:
         }
 
         if (!OutputBlockLen_) {
-            YQL_ENSURE(AllOf(InputData_, [](const TDqInputBatch& input) { return input.IsEmpty() && input.IsFinished(); }));
             return NUdf::EFetchStatus::Finish;
         }
 

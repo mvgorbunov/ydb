@@ -179,7 +179,6 @@ namespace NKikimr::NStorage {
         vdiskConfig->EnableVDiskCooldownTimeout = Cfg->EnableVDiskCooldownTimeout;
         vdiskConfig->ReplPausedAtStart = Cfg->VDiskReplPausedAtStart;
         vdiskConfig->EnableVPatch = EnableVPatch;
-        vdiskConfig->DefaultHugeGarbagePerMille = DefaultHugeGarbagePerMille;
 
         vdiskConfig->EnableLocalSyncLogDataCutting = EnableLocalSyncLogDataCutting;
         if (deviceType == NPDisk::EDeviceType::DEVICE_TYPE_ROT) {

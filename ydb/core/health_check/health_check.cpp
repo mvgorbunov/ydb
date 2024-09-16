@@ -56,7 +56,6 @@ struct hash<NKikimrBlobStorage::TVSlotId> {
 }
 
 #define BLOG_CRIT(stream) LOG_CRIT_S(*TlsActivationContext, NKikimrServices::HEALTH, stream)
-#define BLOG_D(stream) LOG_DEBUG_S(*TlsActivationContext, NKikimrServices::HEALTH, stream)
 
 namespace NKikimr {
 
@@ -249,7 +248,6 @@ public:
     struct TGroupState {
         TString ErasureSpecies;
         std::vector<const NKikimrSysView::TVSlotEntry*> VSlots;
-        ui32 Generation;
     };
 
     struct TSelfCheckResult {
@@ -645,7 +643,7 @@ public:
     }
 
     bool NeedWhiteboardInfoForGroup(TGroupId groupId) {
-        return UnknownStaticGroups.contains(groupId) || (!HaveAllBSControllerInfo() && IsStaticGroup(groupId));
+        return !HaveAllBSControllerInfo() && IsStaticGroup(groupId);
     }
 
     void Handle(TEvNodeWardenStorageConfig::TPtr ev) {
@@ -680,7 +678,6 @@ public:
 
                     auto groupId = vDisk.GetVDiskID().GetGroupID();
                     if (NeedWhiteboardInfoForGroup(groupId)) {
-                        BLOG_D("Requesting whiteboard for group " << groupId);
                         RequestStorageNode(vDisk.GetVDiskLocation().GetNodeID());
                     }
                 }
@@ -1289,17 +1286,12 @@ public:
         for (const auto& group : Groups->GetEntries()) {
             auto groupId = group.GetKey().GetGroupId();
             auto poolId = group.GetInfo().GetStoragePoolId();
-            auto& groupState = GroupState[groupId];
-            groupState.ErasureSpecies = group.GetInfo().GetErasureSpeciesV2();
-            groupState.Generation = group.GetInfo().GetGeneration();
+            GroupState[groupId].ErasureSpecies = group.GetInfo().GetErasureSpeciesV2();
             StoragePoolState[poolId].Groups.emplace(groupId);
         }
         for (const auto& vSlot : VSlots->GetEntries()) {
             auto vSlotId = GetVSlotId(vSlot.GetKey());
-            auto groupStateIt = GroupState.find(vSlot.GetInfo().GetGroupId());
-            if (groupStateIt != GroupState.end() && vSlot.GetInfo().GetGroupGeneration() == groupStateIt->second.Generation) {
-                groupStateIt->second.VSlots.push_back(&vSlot);
-            }
+            GroupState[vSlot.GetInfo().GetGroupId()].VSlots.push_back(&vSlot);
         }
         for (const auto& pool : StoragePools->GetEntries()) { // there is no specific pool for static group here
             ui64 poolId = pool.GetKey().GetStoragePoolId();
@@ -1316,7 +1308,6 @@ public:
         // it should not be trusted
         Ydb::Monitoring::StorageGroupStatus staticGroupStatus;
         FillGroupStatus(0, staticGroupStatus, {nullptr});
-        BLOG_D("Static group status is " << staticGroupStatus.overall());
         if (staticGroupStatus.overall() != Ydb::Monitoring::StatusFlag::GREEN) {
             UnknownStaticGroups.emplace(0);
             RequestStorageConfig();
@@ -1721,9 +1712,12 @@ public:
                                  ETags::PDiskState);
         }
         switch (status->number()) {
-            case NKikimrBlobStorage::ACTIVE:
-            case NKikimrBlobStorage::INACTIVE: {
+            case NKikimrBlobStorage::ACTIVE: {
                 context.ReportStatus(Ydb::Monitoring::StatusFlag::GREEN);
+                break;
+            }
+            case NKikimrBlobStorage::INACTIVE: {
+                context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW, "PDisk is inactive", ETags::PDiskState);
                 break;
             }
             case NKikimrBlobStorage::FAULTY:
@@ -1803,13 +1797,6 @@ public:
 
         storageVDiskStatus.set_id(GetVSlotId(vSlot->GetKey()));
 
-        if (!vSlot->GetInfo().HasStatusV2()) {
-            // this should mean that BSC recently restarted and does not have accurate data yet - we should not report to avoid false positives
-            context.ReportStatus(Ydb::Monitoring::StatusFlag::GREEN);
-            storageVDiskStatus.set_overall(context.GetOverallStatus());
-            return;
-        }
-
         const auto *descriptor = NKikimrBlobStorage::EVDiskStatus_descriptor();
         auto status = descriptor->FindValueByName(vSlot->GetInfo().GetStatusV2());
         if (!status) { // this case is not expected because becouse bsc assignes status according EVDiskStatus enum
@@ -1829,12 +1816,16 @@ public:
                 storageVDiskStatus.set_overall(context.GetOverallStatus());
                 return;
             }
+            case NKikimrBlobStorage::INIT_PENDING: { // initialization in process
+                context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW, TStringBuilder() << "VDisk is being initialized", ETags::VDiskState);
+                storageVDiskStatus.set_overall(context.GetOverallStatus());
+                return;
+            }
             case NKikimrBlobStorage::REPLICATING: { // the disk accepts queries, but not all the data was replicated
                 context.ReportStatus(Ydb::Monitoring::StatusFlag::BLUE, TStringBuilder() << "Replication in progress", ETags::VDiskState);
                 storageVDiskStatus.set_overall(context.GetOverallStatus());
                 return;
             }
-            case NKikimrBlobStorage::INIT_PENDING:
             case NKikimrBlobStorage::READY: { // the disk is fully operational and does not affect group fault tolerance
                 context.ReportStatus(Ydb::Monitoring::StatusFlag::GREEN);
             }
@@ -2008,9 +1999,9 @@ public:
 
         switch (vDiskInfo.GetVDiskState()) {
             case NKikimrWhiteboard::EVDiskState::OK:
-            case NKikimrWhiteboard::EVDiskState::Initial:
                 context.ReportStatus(Ydb::Monitoring::StatusFlag::GREEN);
                 break;
+            case NKikimrWhiteboard::EVDiskState::Initial:
             case NKikimrWhiteboard::EVDiskState::SyncGuidRecovery:
                 context.IssueRecords.clear();
                 context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW,
@@ -2090,7 +2081,7 @@ public:
             ++DisksColors[status];
             switch (status) {
                 case Ydb::Monitoring::StatusFlag::BLUE: // disk is good, but not available
-                // No yellow or orange status here - this is intentional - they are used when a disk is running out of space, but is currently available
+                case Ydb::Monitoring::StatusFlag::YELLOW: // disk is initializing, not currently available
                 case Ydb::Monitoring::StatusFlag::RED: // disk is bad, probably not available
                 case Ydb::Monitoring::StatusFlag::GREY: // the status is absent, the disk is not available
                     IncrementFor(realm);
@@ -2106,7 +2097,7 @@ public:
             if (ErasureSpecies == NONE) {
                 if (FailedDisks > 0) {
                     context.ReportStatus(Ydb::Monitoring::StatusFlag::RED, "Group failed", ETags::GroupState, {ETags::VDiskState});
-                } else if (DisksColors[Ydb::Monitoring::StatusFlag::YELLOW] > 0 || DisksColors[Ydb::Monitoring::StatusFlag::ORANGE] > 0) {
+                } else if (DisksColors[Ydb::Monitoring::StatusFlag::YELLOW] > 0) {
                     context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW, "Group degraded", ETags::GroupState, {ETags::VDiskState});
                 }
             } else if (ErasureSpecies == BLOCK_4_2) {
@@ -2120,7 +2111,7 @@ public:
                     } else {
                         context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW, "Group degraded", ETags::GroupState, {ETags::VDiskState});
                     }
-                } else if (DisksColors[Ydb::Monitoring::StatusFlag::YELLOW] > 0 || DisksColors[Ydb::Monitoring::StatusFlag::ORANGE] > 0) {
+                } else if (DisksColors[Ydb::Monitoring::StatusFlag::YELLOW] > 0) {
                     context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW, "Group degraded", ETags::GroupState, {ETags::VDiskState});
                 }
             } else if (ErasureSpecies == MIRROR_3_DC) {
@@ -2134,7 +2125,7 @@ public:
                     } else {
                         context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW, "Group degraded", ETags::GroupState, {ETags::VDiskState});
                     }
-                } else if (DisksColors[Ydb::Monitoring::StatusFlag::YELLOW] > 0 || DisksColors[Ydb::Monitoring::StatusFlag::ORANGE] > 0) {
+                } else if (DisksColors[Ydb::Monitoring::StatusFlag::YELLOW] > 0) {
                     context.ReportStatus(Ydb::Monitoring::StatusFlag::YELLOW, "Group degraded", ETags::GroupState, {ETags::VDiskState});
                 }
             }
@@ -2178,7 +2169,7 @@ public:
         context.OverallStatus = MinStatus(context.OverallStatus, Ydb::Monitoring::StatusFlag::YELLOW);
         checker.ReportStatus(context);
 
-        BLOG_D("Group " << groupId << " has status " << context.GetOverallStatus());
+
         storageGroupStatus.set_overall(context.GetOverallStatus());
     }
 

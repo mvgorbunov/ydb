@@ -269,10 +269,6 @@ public:
             request.SetType(NKikimrKqp::QUERY_TYPE_SQL_DML);
             request.SetKeepSession(false);
             SetTransactionMode(request);
-            if (!request.txcontrol().has_begin_tx()) {
-                request.mutable_txcontrol()->mutable_begin_tx()->mutable_serializable_read_write();
-                request.mutable_txcontrol()->set_commit_tx(true);
-            }
         } else if (Action == "explain" || Action == "explain-ast" || Action == "explain-data") {
             request.SetAction(NKikimrKqp::QUERY_ACTION_EXPLAIN);
             request.SetType(NKikimrKqp::QUERY_TYPE_SQL_DML);
@@ -413,13 +409,7 @@ private:
         }
 
         TStringStream stream;
-        constexpr ui32 doubleNDigits = std::numeric_limits<double>::max_digits10;
-        constexpr ui32 floatNDigits = std::numeric_limits<float>::max_digits10;
-        constexpr EFloatToStringMode floatMode = EFloatToStringMode::PREC_NDIGITS;
         NJson::WriteJson(&stream, &jsonResponse, {
-            .DoubleNDigits = doubleNDigits,
-            .FloatNDigits = floatNDigits,
-            .FloatToStringMode = floatMode,
             .ValidateUtf8 = false,
             .WriteNanAsString = true,
         });
@@ -488,7 +478,7 @@ private:
     void MakeErrorReply(NJson::TJsonValue& jsonResponse, const NYdb::TStatus& status) {
         TString message;
 
-        MakeJsonErrorReply(jsonResponse, message, status);
+        NViewer::MakeErrorReply(jsonResponse, message, status);
 
         if (Span) {
             Span.EndError(message);
@@ -748,5 +738,7 @@ YAML::Node TJsonRequestSwagger<TJsonQuery>::GetSwagger() {
         )___");
     return node;
 }
+
+
 }
 }

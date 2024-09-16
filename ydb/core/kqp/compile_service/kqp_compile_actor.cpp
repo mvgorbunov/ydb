@@ -146,8 +146,7 @@ private:
             .SetIsEnableExternalDataSources(AppData(ctx)->FeatureFlags.GetEnableExternalDataSources())
             .SetIsEnablePgConstsToParams(Config->EnablePgConstsToParams)
             .SetApplicationName(ApplicationName)
-            .SetQueryParameters(QueryId.QueryParameterTypes)
-            .SetIsEnablePgSyntax(AppData(ctx)->FeatureFlags.GetEnablePgSyntax());
+            .SetQueryParameters(QueryId.QueryParameterTypes);
 
         return ParseStatements(QueryId.Text, QueryId.Settings.Syntax, QueryId.IsSql(), settingsBuilder, PerStatementResult);
     }
@@ -176,7 +175,8 @@ private:
         YQL_ENSURE(PerStatementResult);
 
         const auto prepareSettings = PrepareCompilationSettings(ctx);
-        auto result = KqpHost->SplitQuery(QueryRef, prepareSettings);
+
+        auto result = KqpHost->SplitQuery(QueryId.Text, prepareSettings);
 
         Become(&TKqpCompileActor::CompileState);
         ReplySplitResult(ctx, std::move(result));
@@ -275,7 +275,7 @@ private:
         Config->FeatureFlags = AppData(ctx)->FeatureFlags;
 
         KqpHost = CreateKqpHost(Gateway, QueryId.Cluster, QueryId.Database, Config, ModuleResolverState->ModuleResolver,
-            FederatedQuerySetup, UserToken, GUCSettings, QueryServiceConfig, ApplicationName, AppData(ctx)->FunctionRegistry,
+            FederatedQuerySetup, UserToken, GUCSettings, ApplicationName, AppData(ctx)->FunctionRegistry,
             false, false, std::move(TempTablesState), nullptr, SplitCtx);
 
         IKqpHost::TPrepareSettings prepareSettings;

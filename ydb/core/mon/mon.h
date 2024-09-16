@@ -1,6 +1,5 @@
 #pragma once
 
-#include <library/cpp/json/writer/json_value.h>
 #include <library/cpp/monlib/service/monservice.h>
 #include <library/cpp/monlib/dynamic_counters/counters.h>
 #include <library/cpp/monlib/service/pages/resources/css_mon_page.h>
@@ -11,16 +10,11 @@
 
 #include <ydb/library/actors/core/actor.h>
 #include <ydb/library/actors/core/mon.h>
-#include <ydb/library/yql/public/issue/yql_issue.h>
-#include <ydb/public/sdk/cpp/client/ydb_types/status/status.h>
 
 namespace NActors {
 
 IEventHandle* SelectAuthorizationScheme(const NActors::TActorId& owner, NMonitoring::IMonHttpRequest& request);
 IEventHandle* GetAuthorizeTicketResult(const NActors::TActorId& owner);
-
-void MakeJsonErrorReply(NJson::TJsonValue& jsonResponse, TString& message, const NYql::TIssues& issues, NYdb::EStatus status);
-void MakeJsonErrorReply(NJson::TJsonValue& jsonResponse, TString& message, const NYdb::TStatus& status);
 
 class TActorSystem;
 struct TActorId;
@@ -60,7 +54,6 @@ public:
         bool UseAuth = true;
         TVector<TString> AllowedSIDs;
         bool SortPages = true;
-        TString MonServiceName = "utils";
     };
 
     virtual NMonitoring::IMonPage* RegisterActorPage(TRegisterActorPageFields fields) = 0;

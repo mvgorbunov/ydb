@@ -6,7 +6,7 @@
 
 namespace NKikimr::NColumnShard {
 
-class TSharingTransactionOperator: public IProposeTxOperator, public TMonitoringObjectsCounter<TSharingTransactionOperator> {
+class TSharingTransactionOperator: public IProposeTxOperator {
 private:
     using TBase = IProposeTxOperator;
 

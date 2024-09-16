@@ -44,6 +44,19 @@ NSo::NProto::ESolomonClusterType MapClusterType(TSolomonClusterConfig::ESolomonC
     }
 }
 
+const TTypeAnnotationNode* GetItemType(const TExprNode& node) {
+    const TTypeAnnotationNode* typeAnn = node.GetTypeAnn();
+    switch (typeAnn->GetKind()) {
+        case ETypeAnnotationKind::Flow:
+            return typeAnn->Cast<TFlowExprType>()->GetItemType();
+        case ETypeAnnotationKind::Stream:
+            return typeAnn->Cast<TStreamExprType>()->GetItemType();
+        default: break;
+    }
+    YQL_ENSURE(false, "Invalid solomon sink type " << typeAnn->GetKind());
+    return nullptr;
+}
+
 void FillScheme(const TTypeAnnotationNode& itemType, NSo::NProto::TDqSolomonShardScheme& scheme) {
     int index = 0;
     for (const TItemExprType* structItem : itemType.Cast<TStructExprType>()->GetItems()) {
@@ -303,7 +316,7 @@ public:
         shardDesc.SetClusterType(MapClusterType(clusterDesc->GetClusterType()));
         shardDesc.SetUseSsl(clusterDesc->GetUseSsl());
 
-        const TTypeAnnotationNode* itemType = shard.RowType().Ref().GetTypeAnn()->Cast<TTypeExprType>()->GetType();
+        const TTypeAnnotationNode* itemType = GetItemType(node);
         FillScheme(*itemType, *shardDesc.MutableScheme());
 
         if (auto maybeToken = shard.Token()) {

@@ -105,15 +105,15 @@ void TTopicPartitionOperations::AddOperation(const TString& topic, ui32 partitio
     HasWriteOperations_ = true;
 }
 
-void TTopicPartitionOperations::BuildTopicTxs(TTopicOperationTransactions& txs)
+void TTopicPartitionOperations::BuildTopicTxs(THashMap<ui64, NKikimrPQ::TDataTransaction> &txs)
 {
     Y_ABORT_UNLESS(TabletId_.Defined());
     Y_ABORT_UNLESS(Partition_.Defined());
 
-    auto& t = txs[*TabletId_];
+    auto& tx = txs[*TabletId_];
 
     for (auto& [consumer, operations] : Operations_) {
-        NKikimrPQ::TPartitionOperation* o = t.tx.MutableOperations()->Add();
+        NKikimrPQ::TPartitionOperation* o = tx.MutableOperations()->Add();
         o->SetPartitionId(*Partition_);
         auto [begin, end] = operations.GetRange();
         o->SetBegin(begin);
@@ -123,13 +123,12 @@ void TTopicPartitionOperations::BuildTopicTxs(TTopicOperationTransactions& txs)
     }
 
     if (HasWriteOperations_) {
-        NKikimrPQ::TPartitionOperation* o = t.tx.MutableOperations()->Add();
+        NKikimrPQ::TPartitionOperation* o = tx.MutableOperations()->Add();
         o->SetPartitionId(*Partition_);
         o->SetPath(*Topic_);
         if (SupportivePartition_.Defined()) {
             o->SetSupportivePartition(*SupportivePartition_);
         }
-        t.hasWrite = true;
     }
 }
 
@@ -356,7 +355,7 @@ bool TTopicOperations::ProcessSchemeCacheNavigate(const NSchemeCache::TSchemeCac
     return true;
 }
 
-void TTopicOperations::BuildTopicTxs(TTopicOperationTransactions& txs)
+void TTopicOperations::BuildTopicTxs(THashMap<ui64, NKikimrPQ::TDataTransaction> &txs)
 {
     for (auto& [_, operations] : Operations_) {
         operations.BuildTopicTxs(txs);

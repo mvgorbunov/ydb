@@ -183,7 +183,7 @@ public:
         bool parseOk = ParseFromStringNoSizeLimit(config, tabletConfig);
         Y_ABORT_UNLESS(parseOk);
 
-        const PQGroupReserve reserve(config, pqGroup->ActivePartitionCount);
+        const PQGroupReserve reserve(config, pqGroup->TotalPartitionCount);
 
         auto domainInfo = context.SS->ResolveDomainInfo(pathId);
         domainInfo->DecPathsInside();

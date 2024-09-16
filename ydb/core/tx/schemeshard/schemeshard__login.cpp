@@ -1,8 +1,5 @@
-#include <ydb/library/security/util.h>
-#include <ydb/core/protos/auth.pb.h>
-
-#include "schemeshard_audit_log.h"
 #include "schemeshard_impl.h"
+#include <ydb/library/security/util.h>
 
 namespace NKikimr {
 namespace NSchemeShard {
@@ -22,16 +19,10 @@ struct TSchemeShard::TTxLogin : TSchemeShard::TRwTxBase {
     TTxType GetTxType() const override { return TXTYPE_LOGIN; }
 
     NLogin::TLoginProvider::TLoginUserRequest GetLoginRequest() const {
-        const auto& record(Request->Get()->Record);
         return {
-            .User = record.GetUser(),
-            .Password = record.GetPassword(),
-            .Options = {
-                .ExpiresAfter = record.HasExpiresAfterMs()
-                    ? std::chrono::milliseconds(record.GetExpiresAfterMs())
-                    : std::chrono::system_clock::duration::zero()
-                },
-            .ExternalAuth = record.GetExternalAuth(),
+            .User = Request->Get()->Record.GetUser(),
+            .Password = Request->Get()->Record.GetPassword(),
+            .ExternalAuth = Request->Get()->Record.GetExternalAuth()
             };
     }
 
@@ -75,21 +66,14 @@ struct TSchemeShard::TTxLogin : TSchemeShard::TRwTxBase {
             Self->PublishToSchemeBoard(TTxId(), {SubDomainPathId}, ctx);
         }
 
+        NLogin::TLoginProvider::TLoginUserResponse LoginResponse = Self->LoginProvider.LoginUser(GetLoginRequest());
         THolder<TEvSchemeShard::TEvLoginResult> result = MakeHolder<TEvSchemeShard::TEvLoginResult>();
-        const auto& loginRequest = GetLoginRequest();
-        if (loginRequest.ExternalAuth || AppData(ctx)->AuthConfig.GetEnableLoginAuthentication()) {
-            NLogin::TLoginProvider::TLoginUserResponse LoginResponse = Self->LoginProvider.LoginUser(loginRequest);
-            if (LoginResponse.Error) {
-                result->Record.SetError(LoginResponse.Error);
-            }
-            if (LoginResponse.Token) {
-                result->Record.SetToken(LoginResponse.Token);
-            }
-        } else {
-            result->Record.SetError("Login authentication is disabled");
+        if (LoginResponse.Error) {
+            result->Record.SetError(LoginResponse.Error);
         }
-
-        AuditLogLogin(Request->Get()->Record, result->Record, Self);
+        if (LoginResponse.Token) {
+            result->Record.SetToken(LoginResponse.Token);
+        }
 
         LOG_DEBUG_S(ctx, NKikimrServices::FLAT_TX_SCHEMESHARD,
                     "TTxLogin DoComplete"

@@ -16,7 +16,6 @@ SRCS(
     ydb_persqueue_v1.proto
     ydb_object_storage_v1.proto
     ydb_replication_v1.proto
-    ydb_ymq_v1.proto
 )
 
 PEERDIR(

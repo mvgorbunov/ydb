@@ -307,24 +307,6 @@ public:
                 break;
             }
 
-            case NKqpProto::TKqpSchemeOperation::kCreateTopic: {
-                const auto& modifyScheme = schemeOp.GetCreateTopic();
-                ev->Record.MutableTransaction()->MutableModifyScheme()->CopyFrom(modifyScheme);
-                break;
-            }
-
-            case NKqpProto::TKqpSchemeOperation::kAlterTopic: {
-                const auto& modifyScheme = schemeOp.GetAlterTopic();
-                ev->Record.MutableTransaction()->MutableModifyScheme()->CopyFrom(modifyScheme);
-                break;
-            }
-
-            case NKqpProto::TKqpSchemeOperation::kDropTopic: {
-                const auto& modifyScheme = schemeOp.GetDropTopic();
-                ev->Record.MutableTransaction()->MutableModifyScheme()->CopyFrom(modifyScheme);
-                break;
-            }
-            
             default:
                 InternalError(TStringBuilder() << "Unexpected scheme operation: "
                     << (ui32) schemeOp.GetOperationCase());
@@ -453,7 +435,7 @@ public:
     }
 
     void Handle(TEvPrivate::TEvMakeTempDirResult::TPtr& result) {
-        if (!result->Get()->Result.Success()) {
+        if (!result->Get()->Result.Success()) {   
             InternalError(TStringBuilder()
                 << "Error creating temporary directory for session " << SessionId
                 << ": " << result->Get()->Result.Issues().ToString(true));

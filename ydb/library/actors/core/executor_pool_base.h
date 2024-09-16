@@ -47,16 +47,21 @@ namespace NActors {
 
     class TExecutorPoolBase: public TExecutorPoolBaseMailboxed {
     protected:
-        using TUnorderedCacheActivationQueue = TUnorderedCache<ui32, 512, 4>;
+
+#ifdef RING_ACTIVATION_QUEUE
+        using TActivationQueue = TRingActivationQueue;
+#else
+        using TActivationQueue = TUnorderedCache<ui32, 512, 4>;
+#endif
 
         const i16 PoolThreads;
         TIntrusivePtr<TAffinity> ThreadsAffinity;
         TAtomic Semaphore = 0;
-        std::variant<TUnorderedCacheActivationQueue, TRingActivationQueue> Activations;
+        TActivationQueue Activations;
         TAtomic ActivationsRevolvingCounter = 0;
         std::atomic_bool StopFlag = false;
     public:
-        TExecutorPoolBase(ui32 poolId, ui32 threads, TAffinity* affinity, bool useRingQueue);
+        TExecutorPoolBase(ui32 poolId, ui32 threads, TAffinity* affinity);
         ~TExecutorPoolBase();
         void ScheduleActivation(ui32 activation) override;
         void SpecificScheduleActivation(ui32 activation) override;

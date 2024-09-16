@@ -169,13 +169,12 @@ ui64 TPQReadService::TSession::GetCookie() const {
 ///////////////////////////////////////////////////////////////////////////////
 
 
-TPQReadService::TPQReadService(NKikimr::NGRpcService::TGRpcPersQueueService* service,
-                             const std::vector<grpc::ServerCompletionQueue*>& cqs,
+TPQReadService::TPQReadService(NKikimr::NGRpcService::TGRpcPersQueueService* service, grpc::ServerCompletionQueue* cq,
                              NActors::TActorSystem* as, const TActorId& schemeCache,
                              TIntrusivePtr<NMonitoring::TDynamicCounters> counters,
                              const ui32 maxSessions)
     : Service(service)
-    , CQS(cqs)
+    , CQ(cq)
     , ActorSystem(as)
     , SchemeCache(schemeCache)
     , Counters(counters)
@@ -245,7 +244,7 @@ void TPQReadService::WaitReadSession() {
 
     ActorSystem->Send(MakeGRpcProxyStatusID(ActorSystem->NodeId), new TEvGRpcProxyStatus::TEvUpdateStatus(0,0,1,0));
 
-    TSessionRef session(new TSession(shared_from_this(), CQS[cookie % CQS.size()], cookie, SchemeCache, NewSchemeCache, Counters,
+    TSessionRef session(new TSession(shared_from_this(), CQ, cookie, SchemeCache, NewSchemeCache, Counters,
                                      NeedDiscoverClusters, TopicConverterFactory));
 
     {

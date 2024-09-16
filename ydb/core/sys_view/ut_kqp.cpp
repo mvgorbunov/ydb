@@ -999,7 +999,7 @@ Y_UNIT_TEST_SUITE(SystemView) {
         check.String("Default"); // Kind
         check.Uint64(env.GetServer().GetRuntime()->GetNodeId(0)); // NodeId
         check.Uint64(1u); // PDiskId
-        check.Null(); // Status
+        check.String("ERROR"); // Status
         check.Uint64(0u); // VDisk
         check.Uint64(1000u); // VSlotId
     }

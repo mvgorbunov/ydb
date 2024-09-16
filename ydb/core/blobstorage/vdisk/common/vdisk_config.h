@@ -218,7 +218,6 @@ namespace NKikimr {
         TDuration WhiteboardUpdateInterval;
         bool EnableVDiskCooldownTimeout;
         TControlWrapper EnableVPatch = true;
-        TControlWrapper DefaultHugeGarbagePerMille;
 
         ///////////// COST METRICS SETTINGS ////////////////
         bool UseCostTracker = true;

@@ -99,9 +99,9 @@ void InitLdapSettingsWithEmptyBindPassword(NKikimrProto::TLdapAuthentication* ld
 
 class TLoginClientConnection {
 public:
-    TLoginClientConnection(std::function<void(NKikimrProto::TLdapAuthentication*, ui16, TTempFileHandle&)> initLdapSettings, bool isLoginAuthenticationEnabled = true)
+    TLoginClientConnection(std::function<void(NKikimrProto::TLdapAuthentication*, ui16, TTempFileHandle&)> initLdapSettings)
         : CaCertificateFile()
-        , Server(InitAuthSettings(std::move(initLdapSettings), isLoginAuthenticationEnabled))
+        , Server(InitAuthSettings(std::move(initLdapSettings)))
         , Connection(GetDriverConfig(Server.GetPort()))
         , Client(Connection)
     {}
@@ -119,7 +119,7 @@ public:
     }
 
 private:
-    NKikimrConfig::TAppConfig InitAuthSettings(std::function<void(NKikimrProto::TLdapAuthentication*, ui16, TTempFileHandle&)>&& initLdapSettings, bool isLoginAuthenticationEnabled = true) {
+    NKikimrConfig::TAppConfig InitAuthSettings(std::function<void(NKikimrProto::TLdapAuthentication*, ui16, TTempFileHandle&)>&& initLdapSettings) {
         TPortManager tp;
         LdapPort = tp.GetPort(389);
 
@@ -128,7 +128,6 @@ private:
 
         authConfig->SetUseBlackBox(false);
         authConfig->SetUseLoginProvider(true);
-        authConfig->SetEnableLoginAuthentication(isLoginAuthenticationEnabled);
         appConfig.MutableDomainsConfig()->MutableSecurityConfig()->SetEnforceUserTokenRequirement(true);
         appConfig.MutableFeatureFlags()->SetAllowYdbRequestsWithoutDatabase(false);
 
@@ -378,33 +377,6 @@ Y_UNIT_TEST_SUITE(TGRpcLdapAuthentication) {
 
         loginConnection.Stop();
         ldapServer.Stop();
-    }
-
-    Y_UNIT_TEST(LdapAuthSetIncorrectDomain) {
-        TString login = "ldapuser";
-        TString password = "ldapUserPassword";
-        const TString incorrectLdapDomain = "@ldap.domain"; // Correct domain is AuthConfig.LdapAuthenticationDomain: "ldap"
-
-        auto factory = CreateLoginCredentialsProviderFactory({.User = login + incorrectLdapDomain, .Password = password});
-        TLoginClientConnection loginConnection(InitLdapSettings);
-        auto loginProvider = factory->CreateProvider(loginConnection.GetCoreFacility());
-        UNIT_ASSERT_EXCEPTION_CONTAINS(loginProvider->GetAuthInfo(), yexception, "Invalid user");
-
-        loginConnection.Stop();
-    }
-
-    Y_UNIT_TEST(DisableBuiltinAuthMechanism) {
-        TString login = "builtinUser";
-        TString password = "builtinUserPassword";
-
-        TLoginClientConnection loginConnection(InitLdapSettings, false);
-
-        auto factory = CreateLoginCredentialsProviderFactory({.User = login, .Password = password});
-        auto loginProvider = factory->CreateProvider(loginConnection.GetCoreFacility());
-        TStringBuilder expectedErrorMessage;
-        UNIT_ASSERT_EXCEPTION_CONTAINS(loginProvider->GetAuthInfo(), yexception, "Login authentication is disabled");
-
-        loginConnection.Stop();
     }
 }
 } //namespace NKikimr

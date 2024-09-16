@@ -76,8 +76,7 @@ struct TEvRecompileRequest: public TEventLocal<TEvRecompileRequest, TKqpEvents::
         const TMaybe<TKqpQueryId>& query, bool isQueryActionPrepare, TInstant deadline,
         TKqpDbCountersPtr dbCounters, const TGUCSettings::TPtr& gUCSettings, const TMaybe<TString>& applicationName,
         std::shared_ptr<std::atomic<bool>> intrestedInResult, const TIntrusivePtr<TUserRequestContext>& userRequestContext,
-        NLWTrace::TOrbit orbit = {}, TKqpTempTablesState::TConstPtr tempTablesState = nullptr, TMaybe<TQueryAst> queryAst = Nothing(),
-        bool split = false, NYql::TExprContext* splitCtx = nullptr, NYql::TExprNode::TPtr splitExpr = nullptr)
+        NLWTrace::TOrbit orbit = {}, TKqpTempTablesState::TConstPtr tempTablesState = nullptr, TMaybe<TQueryAst> queryAst = Nothing())
         : UserToken(userToken)
         , Uid(uid)
         , Query(query)
@@ -91,9 +90,6 @@ struct TEvRecompileRequest: public TEventLocal<TEvRecompileRequest, TKqpEvents::
         , TempTablesState(std::move(tempTablesState))
         , IntrestedInResult(std::move(intrestedInResult))
         , QueryAst(queryAst)
-        , Split(split)
-        , SplitCtx(splitCtx)
-        , SplitExpr(splitExpr)
     {
     }
 
@@ -114,10 +110,6 @@ struct TEvRecompileRequest: public TEventLocal<TEvRecompileRequest, TKqpEvents::
     std::shared_ptr<std::atomic<bool>> IntrestedInResult;
 
     TMaybe<TQueryAst> QueryAst;
-    bool Split = false;
-
-    NYql::TExprContext* SplitCtx = nullptr;
-    NYql::TExprNode::TPtr SplitExpr = nullptr;
 };
 
 struct TEvCompileResponse: public TEventLocal<TEvCompileResponse, TKqpEvents::EvCompileResponse> {

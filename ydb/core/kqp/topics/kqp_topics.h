@@ -42,13 +42,6 @@ private:
     TDisjointIntervalTree<ui64> Offsets_;
 };
 
-struct TTopicOperationTransaction {
-    NKikimrPQ::TDataTransaction tx;
-    bool hasWrite = false;
-};
-
-using TTopicOperationTransactions = THashMap<ui64, TTopicOperationTransaction>;
-
 class TTopicPartitionOperations {
 public:
     bool IsValid() const;
@@ -59,7 +52,7 @@ public:
     void AddOperation(const TString& topic, ui32 partition,
                       TMaybe<ui32> supportivePartition);
 
-    void BuildTopicTxs(TTopicOperationTransactions &txs);
+    void BuildTopicTxs(THashMap<ui64, NKikimrPQ::TDataTransaction> &txs);
 
     void Merge(const TTopicPartitionOperations& rhs);
 
@@ -116,7 +109,7 @@ public:
                                     Ydb::StatusIds_StatusCode& status,
                                     TString& message);
 
-    void BuildTopicTxs(TTopicOperationTransactions &txs);
+    void BuildTopicTxs(THashMap<ui64, NKikimrPQ::TDataTransaction> &txs);
 
     void Merge(const TTopicOperations& rhs);
 

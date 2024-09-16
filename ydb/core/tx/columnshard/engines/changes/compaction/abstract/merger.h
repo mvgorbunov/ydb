@@ -21,7 +21,11 @@ public:
 
     virtual ~IColumnMerger() = default;
 
-    void Start(const std::vector<std::shared_ptr<NArrow::NAccessor::IChunkedArray>>& input);
+    void Start(const std::vector<std::shared_ptr<NArrow::NAccessor::IChunkedArray>>& input) {
+        AFL_VERIFY(!Started);
+        Started = true;
+        return DoStart(input);
+    }
 
     std::vector<TColumnPortionResult> Execute(
         const NCompaction::TColumnMergeContext& context, const std::shared_ptr<arrow::RecordBatch>& remap) {

@@ -1947,7 +1947,8 @@ Y_UNIT_TEST_SUITE(KqpScheme) {
     }
 
     Y_UNIT_TEST(CreateTableWithPartitionAtKeysUuid) {
-        TKikimrSettings kikimrSettings;
+        TKikimrSettings kikimrSettings = TKikimrSettings()
+            .SetEnableUuidAsPrimaryKey(true);
         TKikimrRunner kikimr(kikimrSettings);
         auto db = kikimr.GetTableClient();
         auto session = db.CreateSession().GetValueSync().GetSession();
@@ -1991,7 +1992,8 @@ Y_UNIT_TEST_SUITE(KqpScheme) {
     }
 
     Y_UNIT_TEST(CreateTableWithUniformPartitionsUuid) {
-        TKikimrSettings kikimrSettings;
+        TKikimrSettings kikimrSettings = TKikimrSettings()
+            .SetEnableUuidAsPrimaryKey(true);
         TKikimrRunner kikimr(kikimrSettings);
         auto db = kikimr.GetTableClient();
         auto session = db.CreateSession().GetValueSync().GetSession();
@@ -3901,22 +3903,6 @@ Y_UNIT_TEST_SUITE(KqpScheme) {
             auto desc = pq.DescribeTopic("/Root/table/feed_2").ExtractValueSync();
             UNIT_ASSERT_C(desc.IsSuccess(), desc.GetIssues().ToString());
             UNIT_ASSERT_VALUES_EQUAL(desc.GetTopicDescription().GetRetentionPeriod(), TDuration::Hours(1));
-        }
-
-        { // alter
-            auto query = R"(
-                --!syntax_v1
-                ALTER TOPIC `/Root/table/feed_2` SET (
-                    RETENTION_PERIOD = Interval("PT2H")
-                );
-            )";
-
-            const auto result = session.ExecuteSchemeQuery(query).GetValueSync();
-            UNIT_ASSERT_VALUES_EQUAL_C(result.GetStatus(), EStatus::SUCCESS, result.GetIssues().ToString());
-
-            auto desc = pq.DescribeTopic("/Root/table/feed_2").ExtractValueSync();
-            UNIT_ASSERT_C(desc.IsSuccess(), desc.GetIssues().ToString());
-            UNIT_ASSERT_VALUES_EQUAL(desc.GetTopicDescription().GetRetentionPeriod(), TDuration::Hours(2));
         }
 
         { // non-positive (invalid)

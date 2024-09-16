@@ -1,10 +1,8 @@
 #include "schemeshard_xxport__tx_base.h"
-#include "schemeshard_xxport__helpers.h"
 #include "schemeshard_import_flow_proposals.h"
 #include "schemeshard_import_scheme_getter.h"
 #include "schemeshard_import_helpers.h"
 #include "schemeshard_import.h"
-#include "schemeshard_audit_log.h"
 #include "schemeshard_impl.h"
 
 #include <ydb/public/api/protos/ydb_import.pb.h>
@@ -54,7 +52,7 @@ struct TSchemeShard::TImport::TTxCreate: public TSchemeShard::TXxport::TTxBase {
             );
         }
 
-        const TString& uid = GetUid(request.GetRequest().GetOperationParams());
+        const TString& uid = GetUid(request.GetRequest().GetOperationParams().labels());
         if (uid) {
             if (auto it = Self->ImportsByUid.find(uid); it != Self->ImportsByUid.end()) {
                 if (IsSameDomain(it->second, request.GetDatabaseName())) {
@@ -103,7 +101,7 @@ struct TSchemeShard::TImport::TTxCreate: public TSchemeShard::TXxport::TTxBase {
                     settings.set_scheme(Ydb::Import::ImportFromS3Settings::HTTPS);
                 }
 
-                importInfo = new TImportInfo(id, uid, TImportInfo::EKind::S3, settings, domainPath.Base()->PathId, request.GetPeerName());
+                importInfo = new TImportInfo(id, uid, TImportInfo::EKind::S3, settings, domainPath.Base()->PathId);
 
                 if (request.HasUserSID()) {
                     importInfo->UserSID = request.GetUserSID();
@@ -150,6 +148,15 @@ struct TSchemeShard::TImport::TTxCreate: public TSchemeShard::TXxport::TTxBase {
     }
 
 private:
+    static TString GetUid(const google::protobuf::Map<TString, TString>& labels) {
+        auto it = labels.find("uid");
+        if (it == labels.end()) {
+            return TString();
+        }
+
+        return it->second;
+    }
+
     bool Reply(
         THolder<TEvImport::TEvCreateImportResponse> response,
         const Ydb::StatusIds::StatusCode status = Ydb::StatusIds::SUCCESS,
@@ -165,8 +172,6 @@ private:
         if (errorMessage) {
             AddIssue(entry, errorMessage);
         }
-
-        AuditLogImportStart(Request->Get()->Record, response->Record, Self);
 
         Send(Request->Sender, std::move(response), 0, Request->Cookie);
 
@@ -1012,10 +1017,6 @@ private:
         Self->PersistImportState(db, importInfo);
 
         SendNotificationsIfFinished(importInfo);
-
-        if (importInfo->IsFinished()) {
-            AuditLogImportEnd(*importInfo.Get(), Self);
-        }
     }
 
 }; // TTxProgress

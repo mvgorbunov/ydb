@@ -8,7 +8,6 @@
 #include <ydb/library/yql/core/services/mounts/yql_mounts.h>
 
 #include <library/cpp/protobuf/util/pb_io.h>
-#include <ydb/core/protos/config.pb.h>
 
 namespace NKikimr {
 namespace NKqp {
@@ -29,7 +28,7 @@ NKqpProto::TKqpPhyTx BuildTxPlan(const TString& sql, TIntrusivePtr<IKqpGateway> 
     IModuleResolver::TPtr moduleResolver;
     UNIT_ASSERT(GetYqlDefaultModuleResolver(moduleCtx, moduleResolver));
 
-    auto qp = CreateKqpHost(gateway, cluster, "/Root", config, moduleResolver, NYql::IHTTPGateway::Make(), nullptr, nullptr, NKikimrConfig::TQueryServiceConfig(), Nothing(), nullptr, nullptr, false, false, nullptr, actorSystem, nullptr);
+    auto qp = CreateKqpHost(gateway, cluster, "/Root", config, moduleResolver, NYql::IHTTPGateway::Make(), nullptr, nullptr, Nothing(), nullptr, nullptr, false, false, nullptr, actorSystem);
     auto result = qp->SyncPrepareDataQuery(sql, IKqpHost::TPrepareSettings());
     result.Issues().PrintTo(Cerr);
     UNIT_ASSERT(result.Success());

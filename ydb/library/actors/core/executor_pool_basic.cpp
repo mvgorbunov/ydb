@@ -82,7 +82,7 @@ namespace NActors {
     }
 
     TBasicExecutorPool::TBasicExecutorPool(const TBasicExecutorPoolConfig& cfg, IHarmonizer *harmonizer, TExecutorPoolJail *jail)
-        : TExecutorPoolBase(cfg.PoolId, cfg.Threads, new TAffinity(cfg.Affinity), cfg.UseRingQueue)
+        : TExecutorPoolBase(cfg.PoolId, cfg.Threads, new TAffinity(cfg.Affinity))
         , DefaultSpinThresholdCycles(cfg.SpinThreshold * NHPTimer::GetCyclesPerSecond() * 0.000001) // convert microseconds to cycles
         , SpinThresholdCycles(DefaultSpinThresholdCycles)
         , SpinThresholdCyclesPerThread(new NThreading::TPadded<std::atomic<ui64>>[cfg.Threads])
@@ -235,7 +235,7 @@ namespace NActors {
                 }
             } else {
                 TInternalActorTypeGuard<EInternalActorSystemActivity::ACTOR_SYSTEM_GET_ACTIVATION_FROM_QUEUE, false> activityGuard;
-                if (const ui32 activation = std::visit([&revolvingCounter](auto &x) {return x.Pop(++revolvingCounter);}, Activations)) {
+                if (const ui32 activation = Activations.Pop(++revolvingCounter)) {
                     if (workerId >= 0) {
                         Threads[workerId].SetWork();
                     } else {
@@ -308,9 +308,8 @@ namespace NActors {
 
     void TBasicExecutorPool::ScheduleActivationExCommon(ui32 activation, ui64 revolvingCounter, TAtomic x) {
         TSemaphore semaphore = TSemaphore::GetSemaphore(x);
-        std::visit([activation, revolvingCounter](auto &x) {
-            x.Push(activation, revolvingCounter);
-        }, Activations);
+
+        Activations.Push(activation, revolvingCounter);
         bool needToWakeUp = false;
         bool needToChangeOldSemaphore = true;
 

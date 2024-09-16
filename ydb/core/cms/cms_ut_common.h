@@ -107,7 +107,7 @@ struct TTestEnvOpts {
         , UseMirror3dcErasure(false)
         , AdvanceCurrentTime(false)
         , EnableSentinel(false)
-        , EnableCMSRequestPriorities(true)
+        , EnableCMSRequestPriorities(false)
         , EnableSingleCompositeActionGroup(true)
     {
     }
@@ -122,8 +122,8 @@ struct TTestEnvOpts {
         return *this;
     }
 
-    TTestEnvOpts& WithoutEnableCMSRequestPriorities() {
-        EnableCMSRequestPriorities = false;
+    TTestEnvOpts& WithEnableCMSRequestPriorities() {
+        EnableCMSRequestPriorities = true;
         return *this;
     }
 };

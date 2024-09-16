@@ -356,7 +356,7 @@ void TNodeInfo::DeregisterInDomains() {
 void TNodeInfo::Ping() {
     Y_ABORT_UNLESS((bool)Local);
     BLOG_D("Node(" << Id << ") Ping(" << Local << ")");
-    Hive.QueuePing(Local);
+    Hive.SendPing(Local, Id);
 }
 
 void TNodeInfo::SendReconnect(const TActorId& local) {

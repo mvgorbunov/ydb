@@ -1,10 +1,7 @@
 LIBRARY()
 
 SRCS(
-    block_events.cpp
-    block_events.h
     test_runtime.cpp
-    test_runtime.h
 )
 
 PEERDIR(

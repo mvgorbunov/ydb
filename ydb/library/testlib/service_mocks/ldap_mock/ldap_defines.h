@@ -1,7 +1,6 @@
 #pragma once
 #include <util/generic/string.h>
 #include <vector>
-#include <memory>
 #include <utility>
 
 namespace LdapMock {
@@ -40,13 +39,6 @@ enum EFilterType {
     LDAP_FILTER_EXT = 0xA9,
 };
 
-enum EExtendedFilterType {
-    LDAP_FILTER_EXT_OID = 0x81U,
-    LDAP_FILTER_EXT_TYPE = 0x82U,
-    LDAP_FILTER_EXT_VALUE = 0x83U,
-    LDAP_FILTER_EXT_DNATTRS = 0x84U,
-};
-
 enum EElementType {
     BOOL = 0x01,
     STRING = 0x04,
@@ -77,10 +69,6 @@ struct TSearchRequestInfo {
         EFilterType Type;
         TString Attribute;
         TString Value;
-        TString MatchingRule;
-        bool DnAttributes = false;
-
-        std::vector<std::shared_ptr<TSearchFilter>> NestedFilters;
     };
 
     struct TInitializeList {

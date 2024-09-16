@@ -530,7 +530,6 @@ PEERDIR(
     ydb/core/grpc_services
     ydb/core/grpc_services/local_rpc
     ydb/core/health_check
-    ydb/core/mon
     ydb/core/node_whiteboard
     ydb/core/protos
     ydb/core/scheme

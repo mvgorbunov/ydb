@@ -1530,13 +1530,13 @@ ISubOperation::TPtr CreateCompatibleSubdomainDrop(TSchemeShard* ss, TOperationId
     return CreateForceDropSubDomain(id, tx);
 }
 
-TVector<ISubOperation::TPtr> CreateCompatibleSubdomainAlter(TOperationId id, const TTxTransaction& tx, TOperationContext& context) {
+ISubOperation::TPtr CreateCompatibleSubdomainAlter(TSchemeShard* ss, TOperationId id, const TTxTransaction& tx) {
     const auto& info = tx.GetSubDomain();
 
     const TString& parentPathStr = tx.GetWorkingDir();
     const TString& name = info.GetName();
 
-    TPath path = TPath::Resolve(parentPathStr, context.SS).Dive(name);
+    TPath path = TPath::Resolve(parentPathStr, ss).Dive(name);
 
     {
         TPath::TChecker checks = path.Check();
@@ -1546,16 +1546,15 @@ TVector<ISubOperation::TPtr> CreateCompatibleSubdomainAlter(TOperationId id, con
             .NotDeleted();
 
         if (!checks) {
-            return {CreateAlterSubDomain(id, tx)};
+            return CreateAlterSubDomain(id, tx);
         }
     }
 
     if (path.Base()->IsExternalSubDomainRoot()) {
-        // plain subdomains don't have subdomain/tenant hives so only single operation should be returned here
-        return CreateCompatibleAlterExtSubDomain(id, tx, context);
+        return CreateAlterExtSubDomain(id, tx);
     }
 
-    return {CreateAlterSubDomain(id, tx)};
+    return CreateAlterSubDomain(id, tx);
 }
 
 }

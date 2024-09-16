@@ -38,7 +38,7 @@ class TPQWriteServiceImpl : public IPQClustersUpdaterCallback, public std::enabl
         bool IsShuttingDown() const override;
 
     private:
-        [[nodiscard]] bool CreateActor(const TString& localCluster);
+        void CreateActor(const TString& localCluster);
         void SendEvent(NActors::IEventBase* ev);
 
     private:
@@ -52,12 +52,11 @@ class TPQWriteServiceImpl : public IPQClustersUpdaterCallback, public std::enabl
         TIntrusivePtr<NMonitoring::TDynamicCounters> Counters;
 
         bool NeedDiscoverClusters;
-        bool IsDone = false;
     };
     using TSessionRef = TIntrusivePtr<TSession>;
 
 public:
-     TPQWriteServiceImpl(const std::vector<grpc::ServerCompletionQueue*>& cqs,
+     TPQWriteServiceImpl(grpc::ServerCompletionQueue* cq,
                      NActors::TActorSystem* as, const NActors::TActorId& schemeCache, TIntrusivePtr<NMonitoring::TDynamicCounters> counters,
                      const ui32 maxSessions);
     virtual ~TPQWriteServiceImpl() = default;
@@ -95,7 +94,7 @@ private:
 
 private:
     grpc::ServerContext Context;
-    const std::vector<grpc::ServerCompletionQueue*>& CQS;
+    grpc::ServerCompletionQueue* CQ;
 
     NActors::TActorSystem* ActorSystem;
     NActors::TActorId SchemeCache;
@@ -124,10 +123,10 @@ private:
 class TPQWriteService : public TPQWriteServiceImpl {
 public:
     TPQWriteService(NPersQueue::PersQueueService::AsyncService* service,
-                     const std::vector<grpc::ServerCompletionQueue*>& cqs,
+                     grpc::ServerCompletionQueue* cq,
                      NActors::TActorSystem* as, const NActors::TActorId& schemeCache, TIntrusivePtr<NMonitoring::TDynamicCounters> counters,
                      const ui32 maxSessions)
-        : TPQWriteServiceImpl(cqs, as, schemeCache, counters, maxSessions)
+        : TPQWriteServiceImpl(cq, as, schemeCache, counters, maxSessions)
         , Service(service)
     {}
 

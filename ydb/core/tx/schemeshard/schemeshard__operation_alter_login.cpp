@@ -1,7 +1,6 @@
 #include "schemeshard__operation_part.h"
 #include "schemeshard__operation_common.h"
 #include "schemeshard_impl.h"
-#include <ydb/core/protos/auth.pb.h>
 
 namespace {
 
@@ -16,9 +15,7 @@ public:
         NIceDb::TNiceDb db(context.GetTxc().DB); // do not track is there are direct writes happen
         TTabletId ssId = context.SS->SelfTabletId();
         auto result = MakeHolder<TProposeResponse>(OperationId.GetTxId(), ssId);
-        if (!AppData()->AuthConfig.GetEnableLoginAuthentication()) {
-            result->SetStatus(NKikimrScheme::StatusPreconditionFailed, "Login authentication is disabled");
-        } else if (Transaction.GetWorkingDir() != context.SS->LoginProvider.Audience) {
+        if (Transaction.GetWorkingDir() != context.SS->LoginProvider.Audience) {
             result->SetStatus(NKikimrScheme::StatusPreconditionFailed, "Wrong working dir");
         } else {
             const NKikimrConfig::TDomainsConfig::TSecurityConfig& securityConfig = context.SS->GetDomainsConfig().GetSecurityConfig();

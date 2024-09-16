@@ -51,7 +51,6 @@ public:
     void RegisterSourceId(const TString& sourceId, Args&&... args) {
         RegisterSourceIdInfo(sourceId, TSourceIdInfo(std::forward<Args>(args)...), false);
     }
-    void RegisterSourceIdInfo(const TString& sourceId, TSourceIdInfo&& sourceIdInfo, bool load);
 
     void DeregisterSourceId(const TString& sourceId);
 
@@ -66,6 +65,7 @@ public:
 private:
     void LoadRawSourceIdInfo(const TString& key, const TString& data, TInstant now);
     void LoadProtoSourceIdInfo(const TString& key, const TString& data);
+    void RegisterSourceIdInfo(const TString& sourceId, TSourceIdInfo&& sourceIdInfo, bool load);
 
 private:
     TSourceIdMap InMemorySourceIds;

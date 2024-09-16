@@ -34,12 +34,6 @@ namespace NSQLTranslation {
             return result;
         }
 
-        if (parsedSettings.PgParser && parsedSettings.PGDisable) {
-            result.Issues.AddIssue(NYql::YqlIssue(NYql::TPosition(), NYql::TIssuesIds::DEFAULT_ERROR,
-                "PG syntax is disabled"));
-            return result;
-        }
-
         if (parsedSettings.PgParser) {
             return NSQLTranslationPG::PGToYql(query, parsedSettings, stmtParseInfo);
         }
@@ -188,12 +182,6 @@ namespace NSQLTranslation {
             issues.AddIssue(NYql::YqlIssue(NYql::TPosition(), NYql::TIssuesIds::DEFAULT_ERROR,
                 "Externally declared named expressions not supported in V0 syntax"));
             return {};
-        }
-
-        if (parsedSettings.PgParser && parsedSettings.PGDisable) {
-            issues.AddIssue(NYql::YqlIssue(NYql::TPosition(), NYql::TIssuesIds::DEFAULT_ERROR,
-                "PG syntax is disabled"));
-            return result;
         }
 
         if (parsedSettings.PgParser) {

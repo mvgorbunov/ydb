@@ -4685,8 +4685,7 @@ Y_UNIT_TEST_SUITE(KqpPg) {
         ui16 mbusport = tp.GetPort(2134);
         auto settings = Tests::TServerSettings(mbusport)
             .SetDomainName("Root")
-            .SetUseRealThreads(false)
-            .SetEnablePgSyntax(true);
+            .SetUseRealThreads(false);
 
         Tests::TServer::TPtr server = new Tests::TServer(settings);
 
@@ -4731,33 +4730,6 @@ Y_UNIT_TEST_SUITE(KqpPg) {
         UNIT_ASSERT_VALUES_EQUAL(colNames.size(), ydbResults.begin()->Getcolumns().size());
         for (size_t i = 0; i < colNames.size(); i++) {
             UNIT_ASSERT_VALUES_EQUAL(ydbResults.begin()->Getcolumns().at(i).Getname(), colNames[i]);
-        }
-    }
-
-    Y_UNIT_TEST(LongDomainName) {
-        NKikimrConfig::TAppConfig appConfig;
-        appConfig.MutableTableServiceConfig()->SetEnablePreparedDdl(true);
-        auto setting = NKikimrKqp::TKqpSetting();
-        auto serverSettings = TKikimrSettings()
-            .SetAppConfig(appConfig)
-            .SetKqpSettings({setting})
-            .SetDomainRoot(std::string(65, 'a'));
-        TKikimrRunner kikimr(serverSettings.SetWithSampleTables(false));
-        auto db = kikimr.GetQueryClient();
-        auto settings = NYdb::NQuery::TExecuteQuerySettings().Syntax(NYdb::NQuery::ESyntax::Pg);
-        {
-            auto result = db.ExecuteQuery(R"(
-                CREATE TABLE t (id INT PRIMARY KEY, data1 UUID[]);
-            )", NYdb::NQuery::TTxControl::NoTx(), settings).ExtractValueSync();
-            UNIT_ASSERT_C(result.IsSuccess(), result.GetIssues().ToString());
-        }
-
-        {
-            const auto query = Q_(R"(
-                SELECT * FROM t;
-            )");
-            auto result = db.ExecuteQuery(query, NYdb::NQuery::TTxControl::BeginTx().CommitTx(), settings).ExtractValueSync();
-            UNIT_ASSERT_C(result.IsSuccess(), result.GetIssues().ToString());
         }
     }
 }

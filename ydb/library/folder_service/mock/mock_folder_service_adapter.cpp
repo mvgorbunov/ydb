@@ -13,16 +13,14 @@ class TFolderServiceAdapterMock
     using TEvGetCloudByFolderResponse = NKikimr::NFolderService::TEvFolderService::TEvGetCloudByFolderResponse;
 
 public:
-    TFolderServiceAdapterMock(TMaybe<TString> mockedCloudId)
-        : TBase(&TThis::StateWork)
-        , MockedCloudId(mockedCloudId.GetOrElse("mock_cloud"))
-    {
+    TFolderServiceAdapterMock()
+        : TBase(&TThis::StateWork) {
     }
 
     void Handle(TEvGetCloudByFolderRequest::TPtr& ev) {
         auto folderId = ev->Get()->FolderId;
         auto result = std::make_unique<TEvGetCloudByFolderResponse>();
-        TString cloudId = MockedCloudId;
+        TString cloudId = "mock_cloud";
         auto p = folderId.find('@');
         if (p != folderId.npos) {
             cloudId = folderId.substr(p + 1);
@@ -40,14 +38,9 @@ public:
             cFunc(NActors::TEvents::TEvPoisonPill::EventType, PassAway)
         }
     }
-
-private:
-    TString MockedCloudId;
 };
 
-NActors::IActor* CreateMockFolderServiceAdapterActor(
-        const NKikimrProto::NFolderService::TFolderServiceConfig&,
-        const TMaybe<TString> mockedCloudId) {
-    return new TFolderServiceAdapterMock(mockedCloudId);
+NActors::IActor* CreateMockFolderServiceAdapterActor(const NKikimrProto::NFolderService::TFolderServiceConfig&) {
+    return new TFolderServiceAdapterMock();
 }
 } // namespace NKikimr::NFolderService

@@ -27,23 +27,6 @@ using namespace NActors;
 
 
 class TKqpWorkloadService : public TActorBootstrapped<TKqpWorkloadService> {
-    struct TCounters {
-        const NMonitoring::TDynamicCounterPtr Counters;
-
-        NMonitoring::TDynamicCounters::TCounterPtr ActivePools;
-
-        TCounters(NMonitoring::TDynamicCounterPtr counters)
-            : Counters(counters)
-        {
-            Register();
-        }
-
-    private:
-        void Register() {
-            ActivePools = Counters->GetCounter("ActivePools", false);
-        }
-    };
-
     enum class ETablesCreationStatus {
         Cleanup,
         NotStarted,
@@ -60,7 +43,9 @@ class TKqpWorkloadService : public TActorBootstrapped<TKqpWorkloadService> {
 public:
     explicit TKqpWorkloadService(NMonitoring::TDynamicCounterPtr counters)
         : Counters(counters)
-    {}
+    {
+        RegisterCounters();
+    }
 
     void Bootstrap() {
         Become(&TKqpWorkloadService::MainState);
@@ -70,7 +55,7 @@ public:
             (ui32)NKikimrConsole::TConfigItem::FeatureFlagsItem
         }), IEventHandle::FlagTrackDelivery);
 
-        CpuQuotaManager = std::make_unique<TCpuQuotaManagerState>(ActorContext(), Counters.Counters->GetSubgroup("subcomponent", "CpuQuotaManager"));
+        CpuQuotaManager = std::make_unique<TCpuQuotaManagerState>(ActorContext(), Counters->GetSubgroup("subcomponent", "CpuQuotaManager"));
 
         EnabledResourcePools = AppData()->FeatureFlags.GetEnableResourcePools();
         EnabledResourcePoolsOnServerless = AppData()->FeatureFlags.GetEnableResourcePoolsOnServerless();
@@ -147,9 +132,9 @@ public:
             return;
         }
 
-        const TString& database = ev->Get()->Database;
-        LOG_D("Recieved new request from " << workerActorId << ", Database: " << database << ", PoolId: " << ev->Get()->PoolId << ", SessionId: " << ev->Get()->SessionId);
-        GetOrCreateDatabaseState(database)->DoPlaceRequest(std::move(ev));
+        LOG_D("Recieved new request from " << workerActorId << ", Database: " << ev->Get()->Database << ", PoolId: " << ev->Get()->PoolId << ", SessionId: " << ev->Get()->SessionId);
+        bool hasDefaultPool = DatabasesWithDefaultPool.contains(CanonizePath(ev->Get()->Database));
+        Register(CreatePoolResolverActor(std::move(ev), hasDefaultPool, EnabledResourcePoolsOnServerless));
     }
 
     void Handle(TEvCleanupRequest::TPtr& ev) {
@@ -192,7 +177,6 @@ public:
         hFunc(TEvCleanupRequest, Handle);
         hFunc(TEvents::TEvWakeup, Handle);
 
-        hFunc(TEvPrivate::TEvFetchDatabaseResponse, Handle);
         hFunc(TEvPrivate::TEvResolvePoolResponse, Handle);
         hFunc(TEvPrivate::TEvPlaceRequestIntoPoolResponse, Handle);
         hFunc(TEvPrivate::TEvNodesInfoRequest, Handle);
@@ -207,15 +191,11 @@ public:
     )
 
 private:
-    void Handle(TEvPrivate::TEvFetchDatabaseResponse::TPtr& ev) {
-        GetOrCreateDatabaseState(ev->Get()->Database)->UpdateDatabaseInfo(ev);
-    }
-
     void Handle(TEvPrivate::TEvResolvePoolResponse::TPtr& ev) {
         const auto& event = ev->Get()->Event;
         const TString& database = event->Get()->Database;
         if (ev->Get()->DefaultPoolCreated) {
-            GetOrCreateDatabaseState(database)->HasDefaultPool = true;
+            DatabasesWithDefaultPool.insert(CanonizePath(database));
         }
 
         const TString& poolId = event->Get()->PoolId;
@@ -231,10 +211,10 @@ private:
             TString poolKey = GetPoolKey(database, poolId);
             LOG_I("Creating new handler for pool " << poolKey);
 
-            auto poolHandler = Register(CreatePoolHandlerActor(database, poolId, ev->Get()->PoolConfig, Counters.Counters));
+            auto poolHandler = Register(CreatePoolHandlerActor(database, poolId, ev->Get()->PoolConfig, Counters));
             poolState = &PoolIdToState.insert({poolKey, TPoolState{.PoolHandler = poolHandler, .ActorContext = ActorContext()}}).first->second;
 
-            Counters.ActivePools->Inc();
+            ActivePools->Inc();
             ScheduleIdleCheck();
         }
 
@@ -412,7 +392,7 @@ private:
         }
         IdleChecksStarted = true;
 
-        Schedule(IDLE_DURATION / 2, new TEvents::TEvWakeup(static_cast<ui64>(EWakeUp::IdleCheck)));
+        Schedule(IDLE_DURATION / 2, new TEvents::TEvWakeup());
     }
 
     void RunIdleCheck() {
@@ -429,7 +409,7 @@ private:
         }
         for (const auto& poolKey : poolsToDelete) {
             PoolIdToState.erase(poolKey);
-            Counters.ActivePools->Dec();
+            ActivePools->Dec();
         }
 
         if (!PoolIdToState.empty()) {
@@ -466,7 +446,7 @@ private:
     }
 
     void ScheduleNodeInfoRequest() const {
-        Schedule(IDLE_DURATION * 2, new TEvents::TEvWakeup(static_cast<ui64>(EWakeUp::StartNodeInfoRequest)));
+        Schedule(IDLE_DURATION * 2, new TEvents::TEvWakeup(static_cast<ui64>(EWakeUp::StartCpuLoadRequest)));
     }
 
     void RunNodeInfoRequest() const {
@@ -492,14 +472,6 @@ private:
         Send(replyActorId, new TEvCleanupResponse(status, {NYql::TIssue(message)}));
     }
 
-    TDatabaseState* GetOrCreateDatabaseState(const TString& database) {
-        auto databaseIt = DatabaseToState.find(database);
-        if (databaseIt != DatabaseToState.end()) {
-            return &databaseIt->second;
-        }
-        return &DatabaseToState.insert({database, TDatabaseState{.ActorContext = ActorContext(), .EnabledResourcePoolsOnServerless = EnabledResourcePoolsOnServerless}}).first->second;
-    }
-
     TPoolState* GetPoolState(const TString& database, const TString& poolId) {
         return GetPoolState(GetPoolKey(database, poolId));
     }
@@ -520,8 +492,12 @@ private:
         return "[Service] ";
     }
 
+    void RegisterCounters() {
+        ActivePools = Counters->GetCounter("ActivePools", false);
+    }
+
 private:
-    TCounters Counters;
+    NMonitoring::TDynamicCounterPtr Counters;
 
     bool EnabledResourcePools = false;
     bool EnabledResourcePoolsOnServerless = false;
@@ -530,17 +506,15 @@ private:
     ETablesCreationStatus TablesCreationStatus = ETablesCreationStatus::Cleanup;
     std::unordered_set<TString> PendingHandlers;
 
-    std::unordered_map<TString, TDatabaseState> DatabaseToState;
+    std::unordered_set<TString> DatabasesWithDefaultPool;
     std::unordered_map<TString, TPoolState> PoolIdToState;
     std::unique_ptr<TCpuQuotaManagerState> CpuQuotaManager;
     ui32 NodeCount = 0;
+
+    NMonitoring::TDynamicCounters::TCounterPtr ActivePools;
 };
 
 }  // anonymous namespace
-
-bool IsWorkloadServiceRequired(const NResourcePool::TPoolSettings& config) {
-    return config.ConcurrentQueryLimit != -1 || config.DatabaseLoadCpuThreshold >= 0.0 || config.QueryCancelAfter;
-}
 
 }  // namespace NWorkload
 

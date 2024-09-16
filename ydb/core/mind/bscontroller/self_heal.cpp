@@ -432,28 +432,6 @@ namespace NKikimr::NBsController {
                         *v, group.Topology, isSelfHealReasonDecommit, DonorMode));
                 } else {
                     ++counter; // this group can't be reassigned right now
-
-                    auto log = [&]() {
-                        TStringStream ss;
-                        ss << "[";
-                        bool first = true;
-                        for (const auto& [vdiskId, vdisk] : group.Content.VDisks) {
-                            if (!std::exchange(first, false)) {
-                                ss << ",";
-                            }
-                            ss << "{";
-                            ss << vdiskId;
-                            ss << (IsReady(vdisk, now) ? " Ready" : " NotReady");
-                            ss << (vdisk.Faulty ? " Faulty" : "");
-                            ss << (vdisk.Bad ? " IsBad" : "");
-                            ss << (vdisk.Decommitted ? " Decommitted" : "");
-                            ss << "}";
-                        }
-                        ss << "]";
-                        return ss.Str();
-                    };
-        
-                    STLOG(PRI_INFO, BS_SELFHEAL, BSSH11, "group can't be reassigned right now " << log(), (GroupId, group.GroupId));
                 }
             }
 
@@ -935,7 +913,7 @@ namespace NKikimr::NBsController {
                     slot->OnlyPhantomsRemain,
                     slot->IsReady,
                     TMonotonic::Zero(),
-                    slot->GetStatus(),
+                    slot->Status,
                 };
             }
         }
@@ -982,7 +960,7 @@ namespace NKikimr::NBsController {
                         false, /* OnlyPhantomsRemain */
                         true, /* IsReady; decision is based on ReadySince */
                         info.ReadySince,
-                        info.VDiskStatus.value_or(NKikimrBlobStorage::EVDiskStatus::ERROR),
+                        info.VDiskStatus,
                     };
                 }
             }
@@ -1009,7 +987,7 @@ namespace NKikimr::NBsController {
                 const bool was = slot->IsOperational();
                 if (const TGroupInfo *group = slot->Group) {
                     const bool wasReady = slot->IsReady;
-                    if (slot->GetStatus() != m.GetStatus() || slot->OnlyPhantomsRemain != m.GetOnlyPhantomsRemain()) {
+                    if (slot->Status != m.GetStatus() || slot->OnlyPhantomsRemain != m.GetOnlyPhantomsRemain()) {
                         slot->SetStatus(m.GetStatus(), mono, now, m.GetOnlyPhantomsRemain());
                         if (slot->IsReady != wasReady) {
                             ScrubState.UpdateVDiskState(slot);
@@ -1023,14 +1001,14 @@ namespace NKikimr::NBsController {
                         .VDiskId = vdiskId,
                         .OnlyPhantomsRemain = slot->OnlyPhantomsRemain,
                         .IsReady = slot->IsReady,
-                        .VDiskStatus = slot->GetStatus(),
+                        .VDiskStatus = slot->Status,
                     });
                     if (!was && slot->IsOperational() && !group->SeenOperational) {
                         groups.insert(const_cast<TGroupInfo*>(group));
                     }
                     SysViewChangedVSlots.insert(vslotId);
                 }
-                if (slot->GetStatus() == NKikimrBlobStorage::EVDiskStatus::READY) {
+                if (slot->Status == NKikimrBlobStorage::EVDiskStatus::READY) {
                     // we can release donor slots without further notice then the VDisk is completely replicated; we
                     // intentionally use GetStatus() here instead of IsReady() to prevent waiting
                     for (const TVSlotId& donorVSlotId : slot->Donors) {

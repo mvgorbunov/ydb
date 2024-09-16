@@ -1132,8 +1132,7 @@ public:
                 YQL_ENSURE(settings.Mode);
                 auto mode = settings.Mode.Cast();
 
-                if (mode == "create" || mode == "create_if_not_exists") {
-                    bool existingOk = mode == "create_if_not_exists";
+                if (mode == "create") {
                     return Build<TKiCreateTopic>(ctx, node->Pos())
                             .World(node->Child(0))
                             .DataSink(node->Child(1))
@@ -1141,11 +1140,9 @@ public:
                             .TopicSettings(settings.TopicSettings.Cast())
                             .Consumers(settings.Consumers.Cast())
                             .Settings(settings.Other)
-                            .ExistingOk<TCoAtom>().Value(existingOk).Build()
                             .Done()
                             .Ptr();
-                } else if (mode == "alter" || mode == "alter_if_exists") {
-                    bool missingOk = mode == "alter_if_exists";
+                } else if (mode == "alter") {
                     return Build<TKiAlterTopic>(ctx, node->Pos())
                             .World(node->Child(0))
                             .DataSink(node->Child(1))
@@ -1155,17 +1152,14 @@ public:
                             .AlterConsumers(settings.AlterConsumers.Cast())
                             .DropConsumers(settings.DropConsumers.Cast())
                             .Settings(settings.Other)
-                            .MissingOk<TCoAtom>().Value(missingOk).Build()
                             .Done()
                             .Ptr();
-                } else if (mode == "drop" || mode == "drop_if_exists") {
-                    bool missingOk = (mode == "drop_if_exists");
+                } else if (mode == "drop") {
                         return Build<TKiDropTopic>(ctx, node->Pos())
                         .World(node->Child(0))
                         .DataSink(node->Child(1))
                         .Topic().Build(key.GetTopicPath())
                         .Settings(settings.Other)
-                        .MissingOk<TCoAtom>().Value(missingOk).Build()
                         .Done()
                         .Ptr();
                 } else {

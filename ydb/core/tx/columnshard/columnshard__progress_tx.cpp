@@ -2,39 +2,27 @@
 #include "columnshard_schema.h"
 
 #include <ydb/core/tx/columnshard/operations/write.h>
-
 #include <ydb/library/yql/dq/actors/compute/dq_compute_actor.h>
 
 namespace NKikimr::NColumnShard {
 
-class TColumnShard::TTxProgressTx: public TTransactionBase<TColumnShard> {
-private:
-    bool AbortedThroughRemoveExpired = false;
-    TTxController::ITransactionOperator::TPtr TxOperator;
-    const ui32 TabletTxNo;
-    std::optional<NOlap::TSnapshot> LastCompletedTx;
-    std::optional<TTxController::TPlanQueueItem> PlannedQueueItem;
-
+class TColumnShard::TTxProgressTx : public TTransactionBase<TColumnShard> {
 public:
     TTxProgressTx(TColumnShard* self)
         : TTransactionBase(self)
-        , TabletTxNo(++Self->TabletTxCounter) {
-    }
+        , TabletTxNo(++Self->TabletTxCounter)
+    {}
 
-    TTxType GetTxType() const override {
-        return TXTYPE_PROGRESS;
-    }
+    TTxType GetTxType() const override { return TXTYPE_PROGRESS; }
 
     bool Execute(TTransactionContext& txc, const TActorContext& ctx) override {
-        NActors::TLogContextGuard logGuard =
-            NActors::TLogContextBuilder::Build(NKikimrServices::TX_COLUMNSHARD)("tablet_id", Self->TabletID())("tx_state", "execute");
+        NActors::TLogContextGuard logGuard = NActors::TLogContextBuilder::Build(NKikimrServices::TX_COLUMNSHARD)("tablet_id", Self->TabletID())("tx_state", "execute");
         Y_ABORT_UNLESS(Self->ProgressTxInFlight);
         Self->TabletCounters->Simple()[COUNTER_TX_COMPLETE_LAG].Set(Self->GetTxCompleteLag().MilliSeconds());
 
         const size_t removedCount = Self->ProgressTxController->CleanExpiredTxs(txc);
         if (removedCount > 0) {
             // We cannot continue with this transaction, start a new transaction
-            AbortedThroughRemoveExpired = true;
             Self->Execute(new TTxProgressTx(Self), ctx);
             return true;
         }
@@ -60,11 +48,7 @@ public:
     }
 
     void Complete(const TActorContext& ctx) override {
-        if (AbortedThroughRemoveExpired) {
-            return;
-        }
-        NActors::TLogContextGuard logGuard =
-            NActors::TLogContextBuilder::Build(NKikimrServices::TX_COLUMNSHARD)("tablet_id", Self->TabletID())("tx_state", "complete");
+        NActors::TLogContextGuard logGuard = NActors::TLogContextBuilder::Build(NKikimrServices::TX_COLUMNSHARD)("tablet_id", Self->TabletID())("tx_state", "complete");
         if (TxOperator) {
             TxOperator->ProgressOnComplete(*Self, ctx);
             Self->RescheduleWaitingReads();
@@ -81,6 +65,12 @@ public:
         }
         Self->SetupIndexation();
     }
+
+private:
+    TTxController::ITransactionOperator::TPtr TxOperator;
+    const ui32 TabletTxNo;
+    std::optional<NOlap::TSnapshot> LastCompletedTx;
+    std::optional<TTxController::TPlanQueueItem> PlannedQueueItem;
 };
 
 void TColumnShard::EnqueueProgressTx(const TActorContext& ctx) {
@@ -111,4 +101,4 @@ void TColumnShard::Handle(TEvColumnShard::TEvCheckPlannedTransaction::TPtr& ev, 
     // For now do not return result for not finished tx. It would be sent in TTxProgressTx::Complete()
 }
 
-}   // namespace NKikimr::NColumnShard
+}

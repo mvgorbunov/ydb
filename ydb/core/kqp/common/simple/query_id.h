@@ -44,8 +44,6 @@ public:
             GUCSettings.GetHash());
         return THash<decltype(tuple)>()(tuple);
     }
-
-    TString SerializeToString() const;
 };
 } // namespace NKikimr::NKqp
 

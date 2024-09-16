@@ -1455,7 +1455,7 @@ virtual TStatus HandleCreateTable(TKiCreateTable create, TExprContext& ctx) over
     }
 
     static bool CheckTopicSettings(const TCoNameValueTupleList& settings, TExprContext& ctx) {
-        ui32 minParts = 0, maxPartitions = 0;
+        ui32 minParts = 0, partsLimit = 0;
         TPosition errorPos;
         for (const auto& setting : settings) {
             auto name = setting.Name().Value();
@@ -1477,11 +1477,11 @@ virtual TStatus HandleCreateTable(TKiCreateTable create, TExprContext& ctx) over
                 );
                 minParts = value;
                 errorPos = ctx.GetPosition(setting.Value().Ref().Pos());
-            } else if (name == "setMaxPartitions") {
+            } else if (name == "setPartitionsLimit") {
                 ui32 value = FromString<ui32>(
                         setting.Value().Cast<TCoDataCtor>().Literal().template Cast<TCoAtom>().Value()
                 );
-                maxPartitions = value;
+                partsLimit = value;
                 errorPos = ctx.GetPosition(setting.Value().Ref().Pos());
             } else if (name.StartsWith("reset")) {
                 ctx.AddError(TIssue(
@@ -1490,10 +1490,10 @@ virtual TStatus HandleCreateTable(TKiCreateTable create, TExprContext& ctx) over
                 );
                 return false;
             }
-            if (minParts && maxPartitions && maxPartitions < minParts) {
+            if (minParts && partsLimit && partsLimit < minParts) {
                 ctx.AddError(TIssue(
                         errorPos,
-                        TStringBuilder() << "max_partitions cannot be less than min_partitions")
+                        TStringBuilder() << "partitions_limit cannot be less than min_partitions")
                 );
                 return false;
             }

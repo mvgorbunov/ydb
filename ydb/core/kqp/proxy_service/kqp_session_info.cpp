@@ -6,8 +6,6 @@ namespace NKikimr::NKqp {
 
 using VSessions = NKikimr::NSysView::Schema::QuerySessions;
 
-constexpr size_t QUERY_TEXT_LIMIT = 10_KB;
-
 void TKqpSessionInfo::SerializeTo(::NKikimrKqp::TSessionInfo* proto, const TFieldsMap& fieldsMap) const {
     if (fieldsMap.NeedField(VSessions::SessionId::ColumnId)) {  // 1
         proto->SetSessionId(SessionId);
@@ -28,12 +26,7 @@ void TKqpSessionInfo::SerializeTo(::NKikimrKqp::TSessionInfo* proto, const TFiel
 
     // last executed query or currently running query.
     if (fieldsMap.NeedField(VSessions::Query::ColumnId)) {  // 4
-        if (QueryText.size() > QUERY_TEXT_LIMIT) {
-            TString truncatedText = QueryText.substr(0, QUERY_TEXT_LIMIT);
-            proto->SetQuery(QueryText);
-        } else {
-            proto->SetQuery(QueryText);
-        }
+        proto->SetQuery(QueryText);
     }
 
     if (fieldsMap.NeedField(VSessions::QueryCount::ColumnId)) {  // 5

@@ -961,7 +961,6 @@ NThreading::TFuture<TTableMetadataResult> TKqpTableMetadataLoader::LoadTableMeta
                 auto s = resp.Simple;
                 result.Metadata->RecordsCount = s.RowCount;
                 result.Metadata->DataSize = s.BytesSize;
-                result.Metadata->StatsLoaded = true;
                 promise.SetValue(result);
         });
 

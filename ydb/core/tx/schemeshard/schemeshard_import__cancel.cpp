@@ -1,7 +1,6 @@
 #include "schemeshard_xxport__tx_base.h"
 #include "schemeshard_import_flow_proposals.h"
 #include "schemeshard_import.h"
-#include "schemeshard_audit_log.h"
 #include "schemeshard_impl.h"
 
 #include <ydb/public/api/protos/ydb_issue_message.pb.h>
@@ -92,11 +91,6 @@ struct TSchemeShard::TImport::TTxCancel: public TSchemeShard::TXxport::TTxBase {
 
             Self->PersistImportState(db, importInfo);
             SendNotificationsIfFinished(importInfo);
-
-            if (importInfo->IsFinished()) {
-                AuditLogImportEnd(*importInfo.Get(), Self);
-            }
-
             return respond(Ydb::StatusIds::SUCCESS);
 
         default:
@@ -197,11 +191,6 @@ struct TSchemeShard::TImport::TTxCancelAck: public TSchemeShard::TXxport::TTxBas
         Self->PersistImportState(db, importInfo);
 
         SendNotificationsIfFinished(importInfo);
-
-        if (importInfo->IsFinished()) {
-            AuditLogImportEnd(*importInfo.Get(), Self);
-        }
-
         return true;
     }
 

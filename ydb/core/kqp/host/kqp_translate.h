@@ -1,8 +1,7 @@
 #pragma once
 
-#include <ydb/core/kqp/common/simple/query_ast.h>
-#include <ydb/core/kqp/provider/yql_kikimr_provider.h>
-#include <ydb/core/protos/table_service_config.pb.h>
+#include <ydb/core/kqp/provider/yql_kikimr_results.h>
+#include <ydb/core/kqp/common/kqp.h>
 #include <ydb/library/yql/core/pg_settings/guc_settings.h>
 
 namespace NKikimr {
@@ -62,11 +61,6 @@ public:
         return *this;
     }
 
-    TKqpTranslationSettingsBuilder& SetIsEnablePgSyntax(bool value) {
-        IsEnablePgSyntax = value;
-        return *this;
-    }
-
 private:
     const NYql::EKikimrQueryType QueryType;
     const ui16 KqpYqlSyntaxVersion;
@@ -78,7 +72,6 @@ private:
     TString KqpTablePathPrefix = {};
     bool IsEnableExternalDataSources = false;
     bool IsEnablePgConstsToParams = false;
-    bool IsEnablePgSyntax = false;
     TMaybe<bool> SqlAutoCommit = {};
     TGUCSettings::TPtr GUCSettings;
     TMaybe<TString> ApplicationName = {};
